@@ -11,13 +11,8 @@ using DgLandCrawler.Services.LinkCrawler;
 using DgLandCrawler.Abstraction.Behaviour;
 using DgLandCrawler.Data.Repository;
 using Microsoft.AspNetCore.Builder;
-using MediatR;
-using Microsoft.AspNetCore.Http;
-using DgLandCrawler.Data.Handlers;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Hosting;
 using Microsoft.OpenApi.Models;
-using System.Reflection;
+using Endpoints;
 internal class Program
 {
     private static void Main(string[] args)
@@ -62,7 +57,7 @@ internal class Program
 
             builder.Services.Configure<AppConfig>(builder.Configuration);
             builder.Services.AddTransient<IDGProductRepository, DGProductRepository>();
-            builder.Services.AddTransient<ISiteCrawlerService, SiteCrawlerService>();
+            builder.Services.AddSingleton<ISiteCrawlerService, SiteCrawlerService>();
             builder.Services.AddTransient<IDbUpdater, DbUpdater>();
             builder.Services.AddTransient<ILinkCrawler, LinkCrawler>();
 
@@ -83,44 +78,7 @@ internal class Program
                 options.RoutePrefix = string.Empty; // Set the Swagger UI at the root URL
             });
 
-            app.MapGet("/product/{id:int}", async ([FromServices] IMediator mediator, int id) =>
-            {
-                try
-                {
-                    var product = await mediator.Send(new DGProductQuery(id));
-                    return Results.Ok(product);
-                }
-                catch (KeyNotFoundException ex)
-                {
-                    return Results.NotFound(ex.Message);
-                }
-            });
-
-            app.MapGet("/product/run-crawler", async ([FromServices] IMediator mediator) =>
-            {
-                try
-                {
-                    await mediator.Send(new CrawlerQuery());
-                    return Results.Ok();
-                }
-                catch (KeyNotFoundException ex)
-                {
-                    return Results.NotFound(ex.Message);
-                }
-            });
-
-            app.MapGet("/product/sync-database", async ([FromServices] IMediator mediator) =>
-            {
-                try
-                {
-                    await mediator.Send(new SyncDatabaseRequest());
-                    return Results.Ok();
-                }
-                catch (KeyNotFoundException ex)
-                {
-                    return Results.NotFound(ex.Message);
-                }
-            });
+            app.MapProductEndpoints();
 
             app.Run();
         }

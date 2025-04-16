@@ -8,7 +8,7 @@ namespace DgLandCrawler.Data.Handlers
         private readonly ISiteCrawlerService _siteCrawlerService = siteCrawlerService;
         public async Task Handle(CrawlerQuery request, CancellationToken cancellationToken)
         {
-            await _siteCrawlerService.CrawlThreeMainSupplier();
+            await _siteCrawlerService.CrawlMainSuppliers();
         }
     }
 

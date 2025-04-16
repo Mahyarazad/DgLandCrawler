@@ -17,7 +17,7 @@ using DgLandCrawler.Models.DTO;
 
 namespace DgLandCrawler.Services.SiteCrawler
 {
-    public class SiteCrawlerService : ISiteCrawlerService, IDisposable
+    public class SiteCrawlerService : ISiteCrawlerService
     {
         private readonly ILogger<SiteCrawlerService> _logger;
         private readonly ChromeOptions _options;
@@ -39,7 +39,9 @@ namespace DgLandCrawler.Services.SiteCrawler
                 _options.AddUserProfilePreference("download.prompt_for_download", false);
                 _options.AddUserProfilePreference("download.directory_upgrade", true);
                 _options.AddUserProfilePreference("safebrowsing.enabled", true);
+
                 _driver = new ChromeDriver(_options);
+
                 _httpClientFactory = httpClientFactory;
                 DevToolsSession _devtools = ((ChromeDriver)_driver).GetDevToolsSession();
                 _gptClient = gptClient;
@@ -625,12 +627,11 @@ namespace DgLandCrawler.Services.SiteCrawler
             //await AddGoogleContainerResult(data);
         }
 
-        public async Task CrawlThreeMainSupplier()
+        public async Task CrawlMainSuppliers()
         {
             foreach(var dg in await _dGProductRepository.GetList())
             {
                 foreach(var google in dg.GoogleResult)
-                {
                     try
                     {
                         _driver.Navigate().GoToUrl(google.BaseUrl);
@@ -693,6 +694,7 @@ namespace DgLandCrawler.Services.SiteCrawler
                     {
                         _logger.LogError("Something went wrong: {error}", e.Message);
                     }
+                {
                 }
             }
         }
@@ -723,11 +725,11 @@ namespace DgLandCrawler.Services.SiteCrawler
             return result;
         }
 
-        public void Dispose()
-        {
-            _driver.Close();
-            _driver.Dispose();
-        }
+        //public void Dispose()
+        //{
+        //    _driver.Close();
+        //    _driver.Dispose();
+        //}
 
         public async Task GetProductSearchKeywords()
         {
