@@ -10,8 +10,9 @@ namespace DgLandCrawler.Services.SiteCrawler
         Task PostProductReview();
         Task PostPDP();
         Task DownloadDGLandProducts();
-        Task CrawlMainSuppliers();
-
+        Task CrawlSuppliers();
+        Task FetchNoonLinks();
+        Task FetchSharafDGLinks();
         Task GetProductSearchKeywords();
     }
 }

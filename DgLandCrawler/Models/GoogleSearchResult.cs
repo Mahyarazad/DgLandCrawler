@@ -15,6 +15,8 @@ namespace DgLandCrawler.Models
         public string? BaseUrl { get; set; }
         public string Supplier { get; set; }
         public DateTime CreationTime { get; set; }
+
+        // Navigation Property
         public DGProductData DGProduct { get; set; }
         public int DGProductId { get; set; }
     }

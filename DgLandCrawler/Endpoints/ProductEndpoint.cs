@@ -25,11 +25,38 @@ public static class ProductEndpoints
             }
         });
 
-        app.MapGet("/product/run-crawler", async ([FromServices] IMediator mediator) =>
+        app.MapGet("/product/fetch-noon-links", async ([FromServices] IMediator mediator) =>
         {
             try
             {
-                await mediator.Send(new CrawlerQuery());
+                await mediator.Send(new CrawlerQuery(CrawlRequest.FetchNoonLinks));
+                return Results.Ok();
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return Results.NotFound(ex.Message);
+            }
+        });
+
+
+        app.MapGet("/product/fetch-sharafdg-links", async ([FromServices] IMediator mediator) =>
+        {
+            try
+            {
+                await mediator.Send(new CrawlerQuery(CrawlRequest.FetchSharafDGLinks));
+                return Results.Ok();
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return Results.NotFound(ex.Message);
+            }
+        });
+
+        app.MapGet("/product/crawl-suppliers", async ([FromServices] IMediator mediator) =>
+        {
+            try
+            {
+                await mediator.Send(new CrawlerQuery(CrawlRequest.CrawlSuppliers));
                 return Results.Ok();
             }
             catch (KeyNotFoundException ex)

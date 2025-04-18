@@ -8,13 +8,37 @@ namespace DgLandCrawler.Data.Handlers
         private readonly ISiteCrawlerService _siteCrawlerService = siteCrawlerService;
         public async Task Handle(CrawlerQuery request, CancellationToken cancellationToken)
         {
-            await _siteCrawlerService.CrawlMainSuppliers();
+            switch (request.Request)
+            {
+                case CrawlRequest.FetchNoonLinks:
+                    await _siteCrawlerService.FetchNoonLinks();
+                    break;
+                case CrawlRequest.FetchSharafDGLinks:
+                    await _siteCrawlerService.FetchSharafDGLinks();
+                    break;
+                case CrawlRequest.CrawlSuppliers:
+                    await _siteCrawlerService.CrawlSuppliers();
+                    break;
+            }
         }
     }
 
 
-    public record struct CrawlerQuery() : IRequest 
+    public record struct CrawlerQuery : IRequest
     {
-        
+        public CrawlRequest Request { get; set; }
+
+        public CrawlerQuery(CrawlRequest request)
+        {
+            Request = request;
+        }
     }
+
+
+    public enum CrawlRequest{
+        FetchNoonLinks = 1,
+        FetchSharafDGLinks = 2,
+        CrawlSuppliers = 3,
+    }
+
 }
