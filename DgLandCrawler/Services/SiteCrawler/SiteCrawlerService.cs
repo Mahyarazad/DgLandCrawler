@@ -14,7 +14,6 @@ using DgLandCrawler.Services.DbUpdater;
 using DgLandCrawler.Data.Repository;
 using DgLandCrawler.Models.DTO;
 using OpenQA.Selenium.Support.UI;
-using Google.Apis.Http;
 
 
 namespace DgLandCrawler.Services.SiteCrawler
@@ -37,19 +36,24 @@ namespace DgLandCrawler.Services.SiteCrawler
 
         private IWebDriver CreateDriver(int remoteDebuggingPort)
         {
-            var _options = new ChromeOptions();
-            _options.AddArgument("--start-maximized");
-            _options.AddArgument($"--remote-debugging-port={remoteDebuggingPort}");
-            _options.AddUserProfilePreference("download.default_directory", @"C:\Users\mhyri\Downloads\selenium_downloads");
-            _options.AddUserProfilePreference("download.prompt_for_download", false);
-            _options.AddUserProfilePreference("download.directory_upgrade", true);
-            _options.AddUserProfilePreference("safebrowsing.enabled", true);
+            var options = new ChromeOptions();
+            options.AddArgument("--start-maximized");
+            //options.AddArgument($"--remote-debugging-port={remoteDebuggingPort}");
+            options.AddUserProfilePreference("download.default_directory", @"C:\Users\mhyri\Downloads\selenium_downloads");
+            options.AddUserProfilePreference("download.prompt_for_download", false);
+            options.AddUserProfilePreference("download.directory_upgrade", true);
+            options.AddUserProfilePreference("safebrowsing.enabled", true);
 
-            IWebDriver _driver = new ChromeDriver(_options);
+            // Create ChromeDriverService manually
+            var service = ChromeDriverService.CreateDefaultService();
+            service.Port = remoteDebuggingPort; // <<< This sets the actual ChromeDriver port
 
-            DevToolsSession _devtools = ((ChromeDriver)_driver).GetDevToolsSession();
-            return _driver;
+            var driver = new ChromeDriver(service, options);
+
+            return driver;
         }
+
+
 
         public async Task StartCaching()
         {
@@ -247,8 +251,6 @@ namespace DgLandCrawler.Services.SiteCrawler
         {
             using (var _driver = CreateDriver(9223))
             {
-                AdminPanelHelper.Login(_driver);
-
                 var productList = await GetProductList();
 
                 foreach (var item in productList)
@@ -557,12 +559,12 @@ namespace DgLandCrawler.Services.SiteCrawler
                 
         }
 
-        public async Task DownloadDGLandProducts()
+        public async Task DownloadDGLandProducts(AdminPanelCredential credential)
         {
 
             using (var _driver = CreateDriver(9226))
             {
-                AdminPanelHelper.Login(_driver);
+                AdminLogin(credential, _driver);
 
                 _driver.Navigate().GoToUrl("https://dgland.ae/wp-admin/edit.php?post_type=product&page=product_exporter");
                 _driver.FindElement(By.XPath("//button[@value='Generate CSV']")).Click();
@@ -945,20 +947,22 @@ namespace DgLandCrawler.Services.SiteCrawler
             //await _dGProductRepository.BulkUpdate(productList);
         }
 
-        public Task AdminLogin(AdminPanelCredential credential)
+        private Task AdminLogin(AdminPanelCredential credential, IWebDriver _driver)
         {
-            using (var _driver = CreateDriver(9230))
-            {
-                _driver.Navigate().GoToUrl("https://dgland.ae/wp-admin/");
+            _driver.Navigate().GoToUrl("https://dgland.ae/wp-admin/");
 
-                _driver.FindElement(By.Id("user_login")).SendKeys(credential.Useranme);
+            _driver.FindElement(By.Id("user_login")).SendKeys(credential.Useranme);
 
-                _driver.FindElement(By.Id("user_pass")).SendKeys(credential.Password);
+            _driver.FindElement(By.Id("user_pass")).SendKeys(credential.Password);
 
-                _driver.FindElement(By.Id("wp-submit")).Click();
-            }
+            _driver.FindElement(By.Id("wp-submit")).Click();
 
             return Task.CompletedTask;
+        }
+
+        public Task GenerateCSVFile()
+        {
+            return Task.FromResult(0);
         }
     }
 }

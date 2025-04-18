@@ -39,12 +39,13 @@ namespace DgLandCrawler.Services.DbUpdater
                 await _productRepository.BulkInsertAsync(missingList);
             }
         }
-    
 
+        public async Task UpdateProducts() => await _productRepository.BulkInsertAsync(GetSiteProducts().ToList());
     }
         public interface IDbUpdater
         {
             Task UpdateMissingProducts();
+            Task UpdateProducts();
 
             IEnumerable<DGProductData> GetSiteProducts();
         }

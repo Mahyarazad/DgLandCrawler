@@ -4,15 +4,16 @@ namespace DgLandCrawler.Services.SiteCrawler
 {
     public interface ISiteCrawlerService
     {
-        Task AdminLogin(AdminPanelCredential credential);
         Task UpdateAltImages();
         Task StartCaching();
         Task PostProductReview();
         Task PostPDP();
-        Task DownloadDGLandProducts();
+        Task DownloadDGLandProducts(AdminPanelCredential credential);
         Task CrawlSuppliers();
         Task FetchNoonLinks();
         Task FetchSharafDGLinks();
         Task GetProductSearchKeywords();
+        Task GenerateCSVFile();
+
     }
 }

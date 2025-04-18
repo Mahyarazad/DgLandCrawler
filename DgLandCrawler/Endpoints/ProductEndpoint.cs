@@ -65,11 +65,11 @@ public static class ProductEndpoints
             }
         });
 
-        app.MapGet("/product/sync-database", async ([FromServices] IMediator mediator) =>
+        app.MapPost("/product/update-products", async ([FromServices] IMediator mediator, AdminPanelCredential credential) =>
         {
             try
             {
-                await mediator.Send(new SyncDatabaseRequest());
+                await mediator.Send(new SyncDatabaseRequest(credential, SyncRequest.UpdateProducts));
                 return Results.Ok();
             }
             catch (KeyNotFoundException ex)
@@ -78,11 +78,11 @@ public static class ProductEndpoints
             }
         });
 
-        app.MapPost("/product/admin-login", async ([FromServices] IMediator mediator, AdminPanelCredential command) =>
+        app.MapPost("/product/add-new-products", async ([FromServices] IMediator mediator, AdminPanelCredential credential) =>
         {
             try
             {
-                await mediator.Send(command);
+                await mediator.Send(new SyncDatabaseRequest(credential, SyncRequest.AddMissingProducts));
                 return Results.Ok();
             }
             catch (KeyNotFoundException ex)

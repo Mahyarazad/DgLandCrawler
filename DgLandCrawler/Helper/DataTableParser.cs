@@ -41,6 +41,7 @@ namespace DgLandCrawler.Helper
                 var pivotTable = new DataTable();
                     pivotTable.Columns.Add("Name", typeof(string));
                     pivotTable.Columns.Add("AvgRegularPrice", typeof(decimal));
+                    pivotTable.Columns.Add("AvgSalesPrice", typeof(decimal));
 
                 // Group by Name and calculate average of RegularPrice
                 var res =  datatable.AsEnumerable()
@@ -50,7 +51,7 @@ namespace DgLandCrawler.Helper
                          Name = row.Field<string>("Name"),
                          SKU = row.Field<string>("SKU")
                      })
-                     .Select(group => new DGProductData(group.Key.Category!, group.Key.Name!, group.Key.SKU! ,Convert.ToInt32(group.Average(row => Convert.ToInt32(row["Regular price"])))));
+                     .Select(group => new DGProductData(group.Key.Category!, group.Key.Name!, group.Key.SKU! ,Convert.ToInt32(group.Average(row => Convert.ToInt32(row["Regular price"]))), Convert.ToInt32(group.Average(row => Convert.ToInt32(row["Sales price"])))));
 
                 return res;
 
