@@ -17,5 +17,7 @@ namespace DgLandCrawler.Data.Repository
         Task<IEnumerable<DGView>> GetUnlistedGoogleResult(IEnumerable<DGProductData> data);
         Task BulkUpdate(IEnumerable<DGProductData> data);
         Task Update(DGProductData data);
+
+        IQueryable<DGProductData> GetListExlcudeMeta();
     }
 }

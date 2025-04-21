@@ -13,6 +13,7 @@ using DgLandCrawler.Data.Repository;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.OpenApi.Models;
 using Endpoints;
+using Microsoft.AspNetCore.Http;
 internal class Program
 {
     private static void Main(string[] args)
@@ -60,12 +61,21 @@ internal class Program
             builder.Services.AddScoped<ISiteCrawlerService, SiteCrawlerService>();
             builder.Services.AddTransient<IDbUpdater, DbUpdater>();
             builder.Services.AddTransient<ILinkCrawler, LinkCrawler>();
+            builder.Services.AddAntiforgery();
 
             // Add Swagger services
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen(options =>
             {
                 options.SwaggerDoc("v1", new OpenApiInfo { Title = "Your API", Version = "v1" });
+
+                options.SupportNonNullableReferenceTypes();
+
+                options.MapType<IFormFile>(() => new Microsoft.OpenApi.Models.OpenApiSchema
+                {
+                    Type = "string",
+                    Format = "binary"
+                });
             });
 
             var app = builder.Build();
@@ -77,6 +87,8 @@ internal class Program
                 options.SwaggerEndpoint("/swagger/v1/swagger.json", "Your API v1");
                 options.RoutePrefix = string.Empty; // Set the Swagger UI at the root URL
             });
+
+            app.UseAntiforgery();
 
             app.MapProductEndpoints();
 

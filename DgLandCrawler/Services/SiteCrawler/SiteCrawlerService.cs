@@ -14,6 +14,8 @@ using DgLandCrawler.Services.DbUpdater;
 using DgLandCrawler.Data.Repository;
 using DgLandCrawler.Models.DTO;
 using OpenQA.Selenium.Support.UI;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 
 
 namespace DgLandCrawler.Services.SiteCrawler
@@ -24,15 +26,17 @@ namespace DgLandCrawler.Services.SiteCrawler
         private readonly IDbUpdater _dbUpdater;
         private readonly IGptClient _gptClient;
         private readonly IDGProductRepository _dGProductRepository;
+        private readonly AppConfig _config;
 
-        public SiteCrawlerService(ILogger<SiteCrawlerService> logger, IGptClient gptClient, IDGProductRepository dGProductRepository, IDbUpdater dbUpdater)
+        public SiteCrawlerService(ILogger<SiteCrawlerService> logger, IDbUpdater dbUpdater, IOptions<AppConfig> _appConfig,
+            IGptClient gptClient, IDGProductRepository dGProductRepository, IConfiguration config)
         {
             _logger = logger;
+            _dbUpdater = dbUpdater;
             _gptClient = gptClient;
             _dGProductRepository = dGProductRepository;
-            _dbUpdater = dbUpdater;
+            _config = _appConfig.Value;
         }
-
 
         private IWebDriver CreateDriver(int remoteDebuggingPort)
         {
@@ -562,19 +566,33 @@ namespace DgLandCrawler.Services.SiteCrawler
         public async Task DownloadDGLandProducts(AdminPanelCredential credential)
         {
 
-            using (var _driver = CreateDriver(9226))
-            {
-                AdminLogin(credential, _driver);
+            using (var _driver = CreateDriver(9226)) 
+            { 
+                var login = Task.Run(() => AdminLogin(credential, _driver));
 
-                _driver.Navigate().GoToUrl("https://dgland.ae/wp-admin/edit.php?post_type=product&page=product_exporter");
-                _driver.FindElement(By.XPath("//button[@value='Generate CSV']")).Click();
-
-                await Task.Delay(20000);
+                Task.WaitAll(login);
 
                 await Task.Delay(100);
 
-                bool closeSignin = true;
+                _driver.Navigate().GoToUrl("https://dgland.ae/wp-admin/edit.php?post_type=product&page=product_exporter");
 
+                await Task.Delay(100);
+                _driver.FindElement(By.XPath("//button[@value='Generate CSV']")).Click();
+
+
+
+                var timeStamp = DateTime.Now;
+
+                while(Directory.GetFiles(_config.DownloadPath).Count() == 0)
+                {
+                    await Task.Delay(5000);
+                }
+
+                while(File.GetCreationTime(Directory.GetFiles(_config.DownloadPath).LastOrDefault()!) < timeStamp)
+                {
+                    await Task.Delay(5000);
+                }
+                
 
                 //foreach(var item in data.Reverse())
                 //{
@@ -852,7 +870,7 @@ namespace DgLandCrawler.Services.SiteCrawler
                                                 CreationTime = DateTime.Now,
                                                 DGProductId = dg.Id,
                                                 Supplier = "SharafDG",
-                                                Price = priceElement.Text
+                                                Price = priceElement.Text.Replace("AED ", "")
                                             });
                                         }
 

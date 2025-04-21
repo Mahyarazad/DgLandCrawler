@@ -8,8 +8,9 @@ namespace DgLandCrawler.Models
         {
             
         }
-        public DGProductData(string category, string name,string sku ,int regularPrice, int salePrice)
-        { 
+        public DGProductData(int id, string category, string name,string sku ,int regularPrice, int salePrice)
+        {
+            DgLandId = id;
             Category = category;
             Name = name;
             SKU = sku;
@@ -19,6 +20,7 @@ namespace DgLandCrawler.Models
             Keywords = [];
         }
         public int Id { get; set; }
+        public int DgLandId { get; set; }
         public string Name { get; set; }
         public string SKU { get; set; }
         public string Category { get; set; }

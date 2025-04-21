@@ -90,5 +90,29 @@ public static class ProductEndpoints
                 return Results.NotFound(ex.Message);
             }
         });
+
+        app.MapPost("/product/add-product-attribute", async (HttpRequest request) =>
+        {
+            if (!request.HasFormContentType)
+                return Results.BadRequest("Form content type is required.");
+
+            var form = await request.ReadFormAsync();
+            var file = form.Files.GetFile("file");
+
+            if (file == null || file.Length == 0)
+                return Results.BadRequest("CSV file is required.");
+
+            using var reader = new StreamReader(file.OpenReadStream());
+            var csvContent = await reader.ReadToEndAsync();
+
+            var lines = csvContent.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
+            foreach (var line in lines)
+            {
+                var values = line.Split(',');
+                // Process values here
+            }
+
+            return Results.Ok("CSV uploaded and read successfully.");
+        }).Accepts<IFormFile>("multipart/form-data", "file");
     }
 }

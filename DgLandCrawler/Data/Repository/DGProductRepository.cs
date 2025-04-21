@@ -51,6 +51,11 @@ namespace DgLandCrawler.Data.Repository
             return await _context.DGProducts.Include(x => x.GoogleResult).ToListAsync();
         }
 
+        public IQueryable<DGProductData> GetListExlcudeMeta()
+        {
+            return  _context.DGProducts;
+        }
+
         public async Task UpdateGoogleSearchResultsAsync(int id, ICollection<GoogleSearchResult> searchResults, CancellationToken cancellationToken = default)
         {
             var product = await _context.DGProducts.FindAsync([id], cancellationToken);

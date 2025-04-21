@@ -2,7 +2,6 @@
 using System.Data;
 using System.Globalization;
 using CsvHelper.Configuration;
-using System.Linq;
 using DgLandCrawler.Models;
 
 namespace DgLandCrawler.Helper
@@ -38,22 +37,16 @@ namespace DgLandCrawler.Helper
         {
             try
             {
-                var pivotTable = new DataTable();
-                    pivotTable.Columns.Add("Name", typeof(string));
-                    pivotTable.Columns.Add("AvgRegularPrice", typeof(decimal));
-                    pivotTable.Columns.Add("AvgSalesPrice", typeof(decimal));
-
-                // Group by Name and calculate average of RegularPrice
-                var res =  datatable.AsEnumerable()
-                     .Where(row => !string.IsNullOrWhiteSpace(row["Regular price"].ToString())) // Filter out rows with null or empty prices
-                     .GroupBy(row => new {
-                         Category = row.Field<string>("Categories"),
-                         Name = row.Field<string>("Name"),
-                         SKU = row.Field<string>("SKU")
-                     })
-                     .Select(group => new DGProductData(group.Key.Category!, group.Key.Name!, group.Key.SKU! ,Convert.ToInt32(group.Average(row => Convert.ToInt32(row["Regular price"]))), Convert.ToInt32(group.Average(row => Convert.ToInt32(row["Sales price"])))));
-
-                return res;
+                return datatable .AsEnumerable()
+                                .Where(row => Convert.ToInt32(row["Published"].ToString()) != -1)
+                                .Select(row => new DGProductData(
+                                    Convert.ToInt32(row["ID"].ToString()),
+                                    string.IsNullOrEmpty(row["Categories"].ToString()) ? "" : row["Categories"].ToString(),
+                                    string.IsNullOrEmpty(row["Name"].ToString()) ? "" : row["Name"].ToString(),
+                                    string.IsNullOrEmpty(row["SKU"].ToString()) ? "" : row["SKU"].ToString(),
+                                    string.IsNullOrEmpty(row["Regular price"].ToString()) ? 0 : Convert.ToInt32(row["Regular price"].ToString()),
+                                    string.IsNullOrEmpty(row["Sale price"].ToString()) ? 0 : Convert.ToInt32(row["Sale price"].ToString())
+                                ));
 
             }catch(Exception ex)
             {
