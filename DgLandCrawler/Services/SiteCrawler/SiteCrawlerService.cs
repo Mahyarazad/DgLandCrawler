@@ -928,43 +928,6 @@ namespace DgLandCrawler.Services.SiteCrawler
             return result;
         }
 
-        public async Task GetProductSearchKeywords()
-        {
-            var productList = await _dGProductRepository.GetList();
-
-            foreach (var dg in productList)
-            {
-                try
-                {
-                    string query = $"I just need the user search keywords (please consider irregular words as well) for this product {dg.Name}, " +
-                        $"please separate your results using dash and space remove your explnation from your respone.";
-                    var respone = await _gptClient.GetResultFromGPT(query);
-
-                    var firstResult = respone!.choices.FirstOrDefault();
-
-                    var result = firstResult?.message.content!.Split("- ");
-
-                    dg.Keywords ??= [];
-
-                    foreach (var item in result!.Where(x => !string.IsNullOrEmpty(x)))
-                    {
-                        dg.Keywords.Add(new Keyword { value = item.Replace("\n", "").Trim() });
-                    }
-
-                    await _dGProductRepository.AddAsync(dg);
-
-                    _logger.LogInformation(dg.Name);
-
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(dg.Name);
-                }
-            }
-
-            //await _dGProductRepository.BulkUpdate(productList);
-        }
-
         private Task AdminLogin(AdminPanelCredential credential, IWebDriver _driver)
         {
             _driver.Navigate().GoToUrl("https://dgland.ae/wp-admin/");

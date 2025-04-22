@@ -5,6 +5,11 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
+using CsvHelper;
+using static OpenQA.Selenium.BiDi.Modules.BrowsingContext.Locator;
+using System.Globalization;
+using DgLandCrawler.Services.SiteCrawler;
+using DgLandCrawler.Helper;
 
 namespace Endpoints;
 
@@ -91,28 +96,37 @@ public static class ProductEndpoints
             }
         });
 
-        app.MapPost("/product/add-product-attribute", async (HttpRequest request) =>
+        app.MapPost("/product/add-product-attribute", async ([FromServices] IChatGPTService gptService, HttpRequest request) =>
         {
             if (!request.HasFormContentType)
                 return Results.BadRequest("Form content type is required.");
 
             var form = await request.ReadFormAsync();
+
             var file = form.Files.GetFile("file");
 
             if (file == null || file.Length == 0)
                 return Results.BadRequest("CSV file is required.");
 
-            using var reader = new StreamReader(file.OpenReadStream());
-            var csvContent = await reader.ReadToEndAsync();
+            using var stream = file.OpenReadStream();
 
-            var lines = csvContent.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
-            foreach (var line in lines)
-            {
-                var values = line.Split(',');
-                // Process values here
-            }
+            using var reader = new StreamReader(stream);
 
-            return Results.Ok("CSV uploaded and read successfully.");
+            using var csv = new CsvReader(reader, CultureInfo.InvariantCulture);
+
+            List<WordpressProduct> records = await CSVHelper.GetWordPressProducts(csv);
+
+            List<WordpressProduct> updatedRecords = await gptService.GetProductAttributes(records);
+
+            MemoryStream resultstream = await CSVHelper.ExportWordpressProducts(updatedRecords);
+
+            resultstream.Position = 0;
+
+            return Results.File(resultstream, "text/csv", "wordpress-products.csv");
+
+
         }).Accepts<IFormFile>("multipart/form-data", "file");
     }
+
+    
 }

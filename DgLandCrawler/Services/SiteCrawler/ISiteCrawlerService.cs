@@ -12,8 +12,6 @@ namespace DgLandCrawler.Services.SiteCrawler
         Task CrawlSuppliers();
         Task FetchNoonLinks();
         Task FetchSharafDGLinks();
-        Task GetProductSearchKeywords();
         Task GenerateCSVFile();
-
     }
 }

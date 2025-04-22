@@ -1,14 +1,18 @@
 ﻿using DgLandCrawler.Models;
+using Microsoft.Extensions.Options;
+using Microsoft.Identity.Client;
 using System.Text;
 
 namespace DgLandCrawler.Services.GptClient
 {
     public class GptClient : IGptClient
     {
-        private const string key = "";
         private readonly IHttpClientFactory _httpClientFactory;
-        public GptClient(IHttpClientFactory httpClientFactory)
+        private readonly AppConfig _appConfig;
+
+        public GptClient(IHttpClientFactory httpClientFactory , IOptions<AppConfig> appConfig)
         {
+            _appConfig = appConfig.Value;
             _httpClientFactory = httpClientFactory;
         }
 
@@ -17,7 +21,7 @@ namespace DgLandCrawler.Services.GptClient
             var client = _httpClientFactory.CreateClient();
             var request = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/chat/completions");
 
-            request.Headers.Add("Authorization", $"Bearer {key}");
+            request.Headers.Add("Authorization", $"Bearer {_appConfig.ChatGPT.Key}");
 
             var requestObject = new
             {

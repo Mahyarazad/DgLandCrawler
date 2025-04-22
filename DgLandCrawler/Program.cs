@@ -59,6 +59,8 @@ internal class Program
             builder.Services.Configure<AppConfig>(builder.Configuration);
             builder.Services.AddTransient<IDGProductRepository, DGProductRepository>();
             builder.Services.AddScoped<ISiteCrawlerService, SiteCrawlerService>();
+            builder.Services.AddScoped<IChatGPTService, ChatGPTService>();
+            builder.Services.AddTransient<IDbUpdater, DbUpdater>();
             builder.Services.AddTransient<IDbUpdater, DbUpdater>();
             builder.Services.AddTransient<ILinkCrawler, LinkCrawler>();
             builder.Services.AddAntiforgery();
