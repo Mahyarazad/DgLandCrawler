@@ -29,47 +29,14 @@ namespace DgLandCrawler.Services.SiteCrawler
                     string query = $"Just give me additional information for {dg.Name}." +
                         $"List them with Key Value pairs, Use the Manufacturer websites or use TechRadar, AnandTech, or Tom’s Hardware to get the information" +
                         $", include all the technical specifications. Just Use markdown language and separate the technical specifications from other infomration" +
-                        $" and ONLY use HEADING LEVEL 3 for separation. What's in The Box comes first, Key Features comes sceond, Technical Specifications comes third, and lastly Additional Features";
+                        $" and ONLY use HEADING LEVEL 3 for separation. What's in The Box comes first, Key Features comes sceond, " +
+                        $"Technical Specifications comes third, and lastly Additional Features." +
+                        $"DON'T PUT THE MODEL in the Technical Specifications, " +
+                        $"All the sub-items should start with - **";
+                        
 
                     var respone = await _gptClient.GetResultFromGPT(query);
-
-                    if(respone!= null && respone.choices.Count > 0)
-                    {
-                        var input = respone.choices[0].message.content;
-                        var specifications = new Dictionary<string, string>();
-                        var features = new Dictionary<string, string>();
-
-                        _logger.LogInformation("GetProductAttributes >> Product Name >>  {Input}", new { Input = dg.Name });
-
-                        _logger.LogInformation("GetProductAttributes >> GPT Response >>  {Input}", new { Input = input });
-
-                        // Split the input into specifications and features sections
-                        string[] sections = input.Split("###", StringSplitOptions.None);
-
-                        sections = [.. sections.Where(x => !string.IsNullOrEmpty(x))];
-
-                        foreach (var section in sections[2..])
-                        {
-                            Dictionary<string, string> keyValues = GetValuesFromMarkdownResult(section);
-
-                            foreach (KeyValuePair<string, string> kv in keyValues.Take(33))
-                            {
-                                if (!string.IsNullOrEmpty(kv.Key) && !kv.Key.Contains("Warranty") && !kv.Key.Contains("Color"))
-                                {
-                                    dg.Attributes.Add(new ProductAttribute()
-                                    {
-                                        Name = kv.Key,
-                                        Values = kv.Value,
-                                        Global = "0",
-                                        Visible = "1"
-                                    });
-                                }
-                            }
-                        }
-
-                        Update_ProductDescription_And_ShortDescription(dg, sections);
-
-                    }
+                    await Update_WordpressProducts(dg, respone);
 
                 }
                 catch (Exception ex)
@@ -79,6 +46,56 @@ namespace DgLandCrawler.Services.SiteCrawler
             }
 
             return wordpressProducts;
+        }
+
+        private Task<WordpressProduct> Update_WordpressProducts(WordpressProduct dg, Root? respone)
+        {
+            if (respone != null && respone.choices.Count > 0)
+            {
+                var input = respone.choices[0].message.content;
+                var specifications = new Dictionary<string, string>();
+                var features = new Dictionary<string, string>();
+
+                _logger.LogInformation("GetProductAttributes >> Product Name >>  {Input}", new { Input = dg.Name });
+
+                _logger.LogInformation("GetProductAttributes >> GPT Response >>  {Input}", new { Input = input });
+
+                // Split the input into specifications and features sections
+                string[] sections = input.Split("###", StringSplitOptions.None);
+
+                sections = [.. sections.Where(x => !string.IsNullOrEmpty(x))];
+
+                foreach (var section in sections[2..])
+                {
+                    Dictionary<string, string> keyValues = GetValuesFromMarkdownResult(section);
+
+                    if(keyValues.Count == 0)
+                    {
+
+                    }
+
+                    foreach (KeyValuePair<string, string> kv in keyValues.Take(33))
+                    {
+                        if (!string.IsNullOrEmpty(kv.Key)
+                            && !kv.Key.Contains("Warranty") 
+                            && !kv.Key.Contains("Color"))
+                        {
+                            dg.Attributes.Add(new ProductAttribute()
+                            {
+                                Name = kv.Key,
+                                Values = kv.Value,
+                                Global = "0",
+                                Visible = "1"
+                            });
+                        }
+                    }
+                }
+
+                Update_ProductDescription_And_ShortDescription(dg, sections);
+
+            }
+
+            return Task.FromResult(dg);
         }
 
         public async Task GetProductSearchKeywords()
@@ -175,42 +192,37 @@ namespace DgLandCrawler.Services.SiteCrawler
 
             Dictionary<string, string> keyValues = new();
             string currentKey = null;
-            List<string> multiLineValue = new List<string>();
+            List<string> multiLineValue = new();
+
             foreach (string rawLine in lines)
             {
                 string line = rawLine.Trim();
 
-                if (line.StartsWith("- **") && line.Contains("**:"))
+                if (line.StartsWith("- **"))
                 {
-                    // If we were collecting multiline value, save the previous key-value
-                    if (currentKey != null && multiLineValue.Count > 0)
+                    // Save previous key-value if multi-line
+                    if (line.StartsWith("- **") && line.EndsWith("**"))
                     {
-                        keyValues[currentKey] = string.Join("\n", multiLineValue);
-                        multiLineValue.Clear();
+                        //keyValues[currentKey] = string.Join("\n", multiLineValue);
+                        //multiLineValue[currentKey] = true;
                     }
 
                     int start = line.IndexOf("**") + 2;
                     int end = line.IndexOf("**", start);
                     string key = line.Substring(start, end - start).Trim();
-
                     string value = line.Substring(end + 2).TrimStart(':', ' ');
 
                     keyValues[key] = value;
+
                     currentKey = key;
                 }
-                else if (line.StartsWith("-") || line.StartsWith("•"))
-                {
-                    // This is part of a multi-line value (like attachments)
-                    if (currentKey != null)
-                    {
-                        multiLineValue.Add(line.TrimStart('-', ' ', '\t'));
-                    }
-                }
+                
 
-                if(boxSection)
+
+                if (boxSection)
                 {
                     if(!line.StartsWith("What's"))
-                        keyValues[line] = line; 
+                        keyValues[line] = line.Replace("- **", "").Replace("**", ""); 
                 }
             }
 

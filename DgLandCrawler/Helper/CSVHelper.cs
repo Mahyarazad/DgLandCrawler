@@ -189,10 +189,5 @@ namespace DgLandCrawler.Helper
             return stream;
         }
 
-        private static string? SanitizeForCsv(string? input)
-        {
-            if (input == null) return null;
-            return input.Replace("\"", "\"\"");
-        }
     }
 }

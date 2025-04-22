@@ -120,10 +120,7 @@ public static class ProductEndpoints
 
             MemoryStream resultstream = await CSVHelper.ExportWordpressProducts(updatedRecords);
 
-            resultstream.Position = 0;
-
             return Results.File(resultstream, "text/csv", "wordpress-products.csv");
-
 
         }).Accepts<IFormFile>("multipart/form-data", "file");
     }
