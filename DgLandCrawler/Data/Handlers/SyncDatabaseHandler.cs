@@ -2,8 +2,6 @@
 using DgLandCrawler.Services.DbUpdater;
 using DgLandCrawler.Services.SiteCrawler;
 using MediatR;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
 
 namespace DgLandCrawler.Data.Handlers
 {
@@ -39,12 +37,5 @@ namespace DgLandCrawler.Data.Handlers
     {
         UpdateProducts = 1,
         AddMissingProducts = 2,
-    }
-
-    public class FileUploadRequest
-    {
-        [FromForm(Name = "file")]
-        public IFormFile File { get; set; }
-
     }
 }

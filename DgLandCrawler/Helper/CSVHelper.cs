@@ -87,7 +87,7 @@ namespace DgLandCrawler.Helper
                 };
 
 
-                for (int i = 1; i <= 2; i++)
+                for (int i = 1; i < 3; i++)
                 {
                     var attr = new ProductAttribute();
                     if (i == 1 || i == 2)
@@ -133,7 +133,7 @@ namespace DgLandCrawler.Helper
                 "Grouped products", "Upsells", "Cross-sells", "External URL", "Button text", "Position", "Brands"
             };
 
-            for (int i = 1; i <= 35; i++)
+            for (int i = 1; i < 36; i++)
             {
                 headers.Add($"Attribute {i} name");
                 headers.Add($"Attribute {i} value(s)");
@@ -170,11 +170,10 @@ namespace DgLandCrawler.Helper
                         row.Add(attr.Values ?? "");
                         row.Add(attr.Visible ?? "");
                         row.Add(attr.Global ?? "");
-                        if (i == 1 || i == 2)
+                        if (i == 0 || i == 1)
                         {
                             row.Add(attr.Default ?? "");
                         }
-                            
                     }
                 }
 

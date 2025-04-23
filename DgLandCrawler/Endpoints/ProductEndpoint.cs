@@ -5,11 +5,6 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
-using CsvHelper;
-using static OpenQA.Selenium.BiDi.Modules.BrowsingContext.Locator;
-using System.Globalization;
-using DgLandCrawler.Services.SiteCrawler;
-using DgLandCrawler.Helper;
 
 namespace Endpoints;
 
@@ -96,7 +91,7 @@ public static class ProductEndpoints
             }
         });
 
-        app.MapPost("/product/add-product-attribute", async ([FromServices] IChatGPTService gptService, HttpRequest request) =>
+        app.MapPost("/product/add-product-attribute", async ([FromServices] IMediator mediator,HttpRequest request) =>
         {
             if (!request.HasFormContentType)
                 return Results.BadRequest("Form content type is required.");
@@ -108,19 +103,9 @@ public static class ProductEndpoints
             if (file == null || file.Length == 0)
                 return Results.BadRequest("CSV file is required.");
 
-            using var stream = file.OpenReadStream();
+            var response = await mediator.Send(new GetProductAttributeRequest(file));
 
-            using var reader = new StreamReader(stream);
-
-            using var csv = new CsvReader(reader, CultureInfo.InvariantCulture);
-
-            List<WordpressProduct> records = await CSVHelper.GetWordPressProducts(csv);
-
-            List<WordpressProduct> updatedRecords = await gptService.GetProductAttributes(records);
-
-            MemoryStream resultstream = await CSVHelper.ExportWordpressProducts(updatedRecords);
-
-            return Results.File(resultstream, "text/csv", "wordpress-products.csv");
+            return Results.File(response.MemoryStream, "text/csv", "wordpress-products.csv");
 
         }).Accepts<IFormFile>("multipart/form-data", "file");
     }

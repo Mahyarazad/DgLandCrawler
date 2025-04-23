@@ -173,7 +173,8 @@ namespace DgLandCrawler.Services.SiteCrawler
             {
                 if (productDescription)
                 {
-                    sb.Append($"<li><strong>{kv.Value}</strong></li>");
+                    if(!string.IsNullOrEmpty(kv.Value))
+                        sb.Append($"<li><strong>{kv.Value}</strong></li>");
                 }
                 else
                 {
