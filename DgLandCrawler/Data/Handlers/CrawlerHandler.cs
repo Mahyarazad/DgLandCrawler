@@ -5,11 +5,15 @@ namespace DgLandCrawler.Data.Handlers
 {
     public class CrawlerHandler(ISiteCrawlerService siteCrawlerService) : IRequestHandler<CrawlerQuery>
     {
+        
         private readonly ISiteCrawlerService _siteCrawlerService = siteCrawlerService;
         public async Task Handle(CrawlerQuery request, CancellationToken cancellationToken)
         {
             switch (request.Request)
             {
+                case CrawlRequest.CacheProducts:
+                    await _siteCrawlerService.StartCaching();
+                    break;
                 case CrawlRequest.FetchNoonLinks:
                     await _siteCrawlerService.FetchNoonLinks();
                     break;
@@ -39,6 +43,7 @@ namespace DgLandCrawler.Data.Handlers
         FetchNoonLinks = 1,
         FetchSharafDGLinks = 2,
         CrawlSuppliers = 3,
+        CacheProducts = 4,
     }
 
 }

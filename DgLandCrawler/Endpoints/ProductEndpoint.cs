@@ -91,6 +91,19 @@ public static class ProductEndpoints
             }
         });
 
+        app.MapGet("/product/cache-products", async ([FromServices] IMediator mediator) =>
+        {
+            try
+            {
+                await mediator.Send(new CrawlerQuery(CrawlRequest.CacheProducts));
+                return Results.NoContent();
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return Results.NotFound(ex.Message);
+            }
+        });
+
         app.MapPost("/product/add-product-attribute", async ([FromServices] IMediator mediator,HttpRequest request) =>
         {
             if (!request.HasFormContentType)

@@ -65,53 +65,59 @@ namespace DgLandCrawler.Services.SiteCrawler
             {
                 try
                 {
-                    _driver.Navigate().GoToUrl("https://dgland.ae/sitemap.xml");
+                    _driver.Navigate().GoToUrl("https://dgland.ae/sitemap_index.xml");
 
-                    var pageSource = _driver.PageSource;
-
-                    foreach (var link in LinkParser.ExtractLinks(pageSource))
+                    foreach (var link in LinkParser.GetSiteUrl(_driver.PageSource))
                     {
                         if (!string.IsNullOrEmpty(link))
                         {
+                            _driver.Navigate().GoToUrl(link);
 
-                            //_driver.Navigate().GoToUrl(link);
-                            //var innerlinks = ExtractLinks(_driver.PageSource);
+                            var childNodes = LinkParser.GetSiteUrl(_driver.PageSource);
 
-                            ////JsonNode parameters = JsonNode();
-                            //await _devtools.SendCommand("Performance.enable", new JsonObject());
-                            //var response = await _devtools.SendCommand("Performance.getMetrics", new JsonObject());
+                            foreach (var childLink in childNodes[1..])
+                            {
+                                _logger.LogInformation("Caching >>  Url >> {Message}", new { Message = childLink });
+                                _driver.Navigate().GoToUrl(childLink);
+                            }
+                                //_driver.Navigate().GoToUrl(link);
+                                //var innerlinks = ExtractLinks(_driver.PageSource);
 
-                            //_devtools.DevToolsEventReceived += (sender, e) =>
-                            //{
-                            //    Console.WriteLine(e.ToString());
-                            //};
+                                ////JsonNode parameters = JsonNode();
+                                //await _devtools.SendCommand("Performance.enable", new JsonObject());
+                                //var response = await _devtools.SendCommand("Performance.getMetrics", new JsonObject());
 
-                            //var metrics = response;
-                            //Console.WriteLine(response.ToString());
-                            //var metrics = System.Text.Json.JsonSerializer.Deserialize<Root>(response.ToString());
-                            //// Extract LCP, CLS, and INP from the metrics
-                            //var lcp = metrics["largestContentfulPaint"]; 
-                            //var cls = metrics["cumulativeLayoutShift"]; 
-                            //var inp = metrics["interactionToNextPaint"];
-                            //foreach(var jobUrl in innerlinks)
-                            //{
-                            //_driver.Navigate().GoToUrl(jobUrl);
+                                //_devtools.DevToolsEventReceived += (sender, e) =>
+                                //{
+                                //    Console.WriteLine(e.ToString());
+                                //};
 
-
-
-                            //var requestBody = new UrlNotification
-                            //{
-                            //    Url = jobUrl,
-                            //    Type = action
-                            //};
-
+                                //var metrics = response;
+                                //Console.WriteLine(response.ToString());
+                                //var metrics = System.Text.Json.JsonSerializer.Deserialize<Root>(response.ToString());
+                                //// Extract LCP, CLS, and INP from the metrics
+                                //var lcp = metrics["largestContentfulPaint"]; 
+                                //var cls = metrics["cumulativeLayoutShift"]; 
+                                //var inp = metrics["interactionToNextPaint"];
+                                //foreach(var jobUrl in innerlinks)
+                                //{
+                                //_driver.Navigate().GoToUrl(jobUrl);
 
 
-                            //var response = await httpClient.SendAsync(url);
-                            //Console.WriteLine($"  >> Current link >>  " + link + "  >> Current innerlink >>  " + innerlink);
-                            //}
-                            //Console.WriteLine("  >> Current link >>  " + link);
-                        }
+
+                                //var requestBody = new UrlNotification
+                                //{
+                                //    Url = jobUrl,
+                                //    Type = action
+                                //};
+
+
+
+                                //var response = await httpClient.SendAsync(url);
+                                //Console.WriteLine($"  >> Current link >>  " + link + "  >> Current innerlink >>  " + innerlink);
+                                //}
+                                //Console.WriteLine("  >> Current link >>  " + link);
+                            }
                     }
 
 
@@ -123,8 +129,6 @@ namespace DgLandCrawler.Services.SiteCrawler
                     _logger.LogError("An error occurred: {StackTrace}", new { StackTrace = e.StackTrace });
                 }
             }
-            
-
         }
 
         private Task<List<DGProduct>> GetProductList()
