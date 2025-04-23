@@ -38,21 +38,30 @@ namespace DgLandCrawler.Services.SiteCrawler
             _config = _appConfig.Value;
         }
 
-        private IWebDriver CreateDriver(int remoteDebuggingPort)
+        private IWebDriver CreateDriver(int remoteDebuggingPort, bool headless = true)
         {
             var options = new ChromeOptions();
-            options.AddArgument("--start-maximized");
+
+            if (headless)
+            {
+                options.AddArgument("--start-maximized");
+                options.AddArgument("--headless=new"); // Use --headless=new for Chrome 109+
+                options.AddArgument("--disable-gpu");  // Optional: helps on Windows
+            }
+
             //options.AddArgument($"--remote-debugging-port={remoteDebuggingPort}");
             options.AddUserProfilePreference("download.default_directory", @"C:\Users\mhyri\Downloads\selenium_downloads");
             options.AddUserProfilePreference("download.prompt_for_download", false);
             options.AddUserProfilePreference("download.directory_upgrade", true);
             options.AddUserProfilePreference("safebrowsing.enabled", true);
 
+
             // Create ChromeDriverService manually
             var service = ChromeDriverService.CreateDefaultService();
             service.Port = remoteDebuggingPort; // <<< This sets the actual ChromeDriver port
 
             var driver = new ChromeDriver(service, options);
+            driver.Manage().Timeouts().PageLoad = TimeSpan.FromSeconds(60);
 
             return driver;
         }
@@ -65,9 +74,10 @@ namespace DgLandCrawler.Services.SiteCrawler
             {
                 try
                 {
+                    var taskList = new List<Task>();
                     _driver.Navigate().GoToUrl("https://dgland.ae/sitemap_index.xml");
-
-                    foreach (var link in LinkParser.GetSiteUrl(_driver.PageSource))
+                    var parentLinks = LinkParser.GetSiteUrl(_driver.PageSource);
+                    foreach (var (link, index) in parentLinks.Select((value, index) => (value, index)))
                     {
                         if (!string.IsNullOrEmpty(link))
                         {
@@ -75,52 +85,31 @@ namespace DgLandCrawler.Services.SiteCrawler
 
                             var childNodes = LinkParser.GetSiteUrl(_driver.PageSource);
 
-                            foreach (var childLink in childNodes[1..])
+                            taskList.Add(Task.Run(()=>
                             {
-                                _logger.LogInformation("Caching >>  Url >> {Message}", new { Message = childLink });
-                                _driver.Navigate().GoToUrl(childLink);
+                                using (var __driver = CreateDriver(940 + index))
+                                {
+                                    foreach (var childLink in childNodes[1..])
+                                    {
+                                        try
+                                        {
+                                            _logger.LogInformation("Caching >>  Url >> {Message}", new { Message = childLink });
+                                            __driver.Navigate().GoToUrl(childLink);
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            _logger.LogError("Inner navigation error: {Message}", ex.Message);
+                                            _logger.LogError("StackTrace: {StackTrace}", ex.StackTrace);
+                                        }
+
+                                    }
+                                }
                             }
-                                //_driver.Navigate().GoToUrl(link);
-                                //var innerlinks = ExtractLinks(_driver.PageSource);
-
-                                ////JsonNode parameters = JsonNode();
-                                //await _devtools.SendCommand("Performance.enable", new JsonObject());
-                                //var response = await _devtools.SendCommand("Performance.getMetrics", new JsonObject());
-
-                                //_devtools.DevToolsEventReceived += (sender, e) =>
-                                //{
-                                //    Console.WriteLine(e.ToString());
-                                //};
-
-                                //var metrics = response;
-                                //Console.WriteLine(response.ToString());
-                                //var metrics = System.Text.Json.JsonSerializer.Deserialize<Root>(response.ToString());
-                                //// Extract LCP, CLS, and INP from the metrics
-                                //var lcp = metrics["largestContentfulPaint"]; 
-                                //var cls = metrics["cumulativeLayoutShift"]; 
-                                //var inp = metrics["interactionToNextPaint"];
-                                //foreach(var jobUrl in innerlinks)
-                                //{
-                                //_driver.Navigate().GoToUrl(jobUrl);
-
-
-
-                                //var requestBody = new UrlNotification
-                                //{
-                                //    Url = jobUrl,
-                                //    Type = action
-                                //};
-
-
-
-                                //var response = await httpClient.SendAsync(url);
-                                //Console.WriteLine($"  >> Current link >>  " + link + "  >> Current innerlink >>  " + innerlink);
-                                //}
-                                //Console.WriteLine("  >> Current link >>  " + link);
-                            }
+                            ));                         
+                        }
                     }
 
-
+                    await Task.WhenAll(taskList);
                 }
                 catch (Exception e)
                 {
