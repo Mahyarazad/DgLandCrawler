@@ -669,7 +669,7 @@ namespace DgLandCrawler.Services.SiteCrawler
         public async Task CrawlSuppliers()
         {
             var productList = await _dGProductRepository.GetList();
-            using (var _driver = CreateDriver(9227))
+            using (var _driver = CreateDriver(9227, false))
             {
                 foreach (var dg in productList.Reverse())
                 {
@@ -682,12 +682,12 @@ namespace DgLandCrawler.Services.SiteCrawler
 
                             switch (google.Supplier)
                             {
-                                case "noon":
-                                    string noonScript = "return document.querySelectorAll('div[class=\"priceNow\"]').length > 0;";
+                                case "Noon":
+                                    string noonScript = "return document.querySelectorAll('span[class=\"PriceOffer_priceNowText__08sYH\"]').length > 0;";
                                     bool noonElement = _driver.ExecuteJavaScript<bool>(noonScript);
                                     if (noonElement)
                                     {
-                                        var price = _driver.FindElement(By.XPath("//div[@class='priceNow']")).Text;
+                                        var price = _driver.FindElement(By.XPath("//span[@class='PriceOffer_priceNowText__08sYH']")).Text;
                                         if (!string.IsNullOrEmpty(price))
                                         {
                                             google.Price = price
@@ -702,7 +702,7 @@ namespace DgLandCrawler.Services.SiteCrawler
                                     }
 
                                     break;
-                                case "sharafdg":
+                                case "SharafDG":
                                     string sharafScript = "return document.querySelectorAll('meta[itemprop=\"price\"]').length > 0;";
                                     bool sharafElement = _driver.ExecuteJavaScript<bool>(sharafScript);
                                     if (sharafElement)
