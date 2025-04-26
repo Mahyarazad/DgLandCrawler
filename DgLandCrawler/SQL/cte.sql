@@ -20,3 +20,28 @@ WITH CTE AS (
 )
 SELECT * FROM CTE
 WHERE PriceDifference > 0;
+
+WITH RankedResults AS (
+    SELECT 
+		dg.Id,
+		gs.GoogleId,
+        dg.DgLandId, 
+        gs.CreationTime, 
+        dg.Name, 
+        gs.Title,
+        gs.BaseUrl,
+        gs.Supplier,
+        gs.Price,
+        dg.RegularPrice,
+        dg.SalePrice,
+        ROW_NUMBER() OVER (
+            PARTITION BY gs.BaseUrl 
+            ORDER BY gs.CreationTime DESC
+        ) AS rn
+    FROM GoogleSearchResults AS gs
+    INNER JOIN DGProducts AS dg ON gs.DGProductId = dg.Id
+    WHERE dg.RegularPrice IS NOT NULL AND dg.RegularPrice != 0
+)
+SELECT *
+FROM RankedResults
+WHERE rn = 1 order by CreationTime DESC;

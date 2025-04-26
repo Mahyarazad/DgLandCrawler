@@ -1,6 +1,5 @@
 ﻿using OpenQA.Selenium.Chrome;
 using OpenQA.Selenium;
-using OpenQA.Selenium.DevTools;
 using HtmlAgilityPack;
 using Microsoft.Extensions.Logging;
 using DgLandCrawler.Models;
@@ -669,7 +668,7 @@ namespace DgLandCrawler.Services.SiteCrawler
         public async Task CrawlSuppliers()
         {
             var productList = await _dGProductRepository.GetList();
-            using (var _driver = CreateDriver(9227, false))
+            using (var _driver = CreateDriver(9227))
             {
                 foreach (var dg in productList.Reverse())
                 {
@@ -718,6 +717,7 @@ namespace DgLandCrawler.Services.SiteCrawler
                                 default:
                                     break;
                             }
+
                             await _dGProductRepository.UpdateGoogleSearchResultsAsync(dg.Id, dg.GoogleResult);
                         }
                         catch (Exception e)
