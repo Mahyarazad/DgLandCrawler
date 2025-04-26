@@ -14,6 +14,10 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.OpenApi.Models;
 using Endpoints;
 using Microsoft.AspNetCore.Http;
+using Hangfire;
+using DgLandCrawler.Services;
+using DgLandCrawler.Endpoints;
+using DgLandCrawler.BackgroundJobs;
 internal class Program
 {
     private static void Main(string[] args)
@@ -38,6 +42,11 @@ internal class Program
             var builder = WebApplication.CreateBuilder(args);
 
             builder.Services.AddHttpClient();
+            builder.Services.AddHangfire(x=>
+            {
+                x.UseSqlServerStorage(builder.Configuration.GetConnectionString("MSSqlServer"));
+            });
+            builder.Services.AddHangfireServer();
             builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
 
             builder.Services.AddMemoryCache();
@@ -51,6 +60,9 @@ internal class Program
             });
 
             builder.Services.AddSingleton<IGptClient, GptClient>();
+
+            builder.Services.AddSingleton<JobControlService>();
+
             builder.Services.AddDbContext<ApplicationDbContext>(options =>
             {
                 options.UseSqlServer(connectionString);
@@ -60,9 +72,12 @@ internal class Program
             builder.Services.AddTransient<IDGProductRepository, DGProductRepository>();
             builder.Services.AddScoped<ISiteCrawlerService, SiteCrawlerService>();
             builder.Services.AddScoped<IChatGPTService, ChatGPTService>();
+            builder.Services.AddScoped<PriceCrawlerJob>();
             builder.Services.AddTransient<IDbUpdater, DbUpdater>();
             builder.Services.AddTransient<IDbUpdater, DbUpdater>();
             builder.Services.AddTransient<ILinkCrawler, LinkCrawler>();
+
+
             builder.Services.AddAntiforgery();
 
             // Add Swagger services
@@ -92,7 +107,11 @@ internal class Program
 
             app.UseAntiforgery();
 
+            app.UseHangfireDashboard();
+            app.MapHangfireDashboard();
+
             app.MapProductEndpoints();
+            app.MapBackgroundJobEndpoints();
 
             app.Run();
         }
