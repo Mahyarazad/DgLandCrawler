@@ -72,8 +72,15 @@ namespace DgLandCrawler.Services.DbUpdater
                 }
             };
 
-
-            await _productRepository.BulkUpdate(db_products);
+            // Inititial Process
+            if(!_productRepository.GetListExlcudeMeta().Any())
+            {
+                await _productRepository.BulkInsertAsync(db_products);
+            }
+            else
+            {
+                await _productRepository.BulkUpdate(db_products);
+            }
         }
     }
 
