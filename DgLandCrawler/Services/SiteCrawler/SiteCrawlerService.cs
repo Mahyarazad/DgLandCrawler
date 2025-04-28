@@ -558,7 +558,7 @@ namespace DgLandCrawler.Services.SiteCrawler
         public async Task DownloadDGLandProducts(AdminPanelCredential credential)
         {
 
-            using (var _driver = CreateDriver(9226)) 
+            using (var _driver = CreateDriver(9226, false)) 
             { 
                 var login = Task.Run(() => AdminLogin(credential, _driver));
 
@@ -734,7 +734,7 @@ namespace DgLandCrawler.Services.SiteCrawler
         {
             var productList = await _dGProductRepository.GetList();
 
-            using (var _driver = CreateDriver(9228))
+            using (var _driver = CreateDriver(9228, false))
             {
                 foreach (var dg in productList.Reverse())
                 {
@@ -757,43 +757,64 @@ namespace DgLandCrawler.Services.SiteCrawler
                             if (seachResult != null)
                             {
                                 var product_data = new List<GoogleSearchResult>();
-                                foreach (var product in seachResult)
+
+                                var noon_titles = seachResult
+                                    .SelectMany(x => x.FindElements(By.XPath(".//h2[@class='ProductDetailsSection_title__JorAV']")))
+                                    .Select(e => e.Text)
+                                    .ToList();
+
+                                var noon_prices = seachResult
+                                        .SelectMany(x => x.FindElements(By.XPath(".//strong[@class='Price_amount__2sXa7']")))
+                                        .Select(e => e.Text)
+                                        .ToList();
+
+                                var noon_product_url = seachResult
+                                    .SelectMany(x => x.FindElements(By.XPath("./a")))
+                                    .Select(e => e.GetAttribute("href"))
+                                    .ToList();
+
+                                var query = $"I have a list of product titles: [{string.Join("; ", noon_titles)}]. " +
+                                            $"My product title is: \"{dg.Name}\". " +
+                                            $"First, check for an exact match and return only the matched title. " +
+                                            $"If no exact match exists, find and return only the closest matching product title based on model, storage, and color. " +
+                                            $"Return only the product title, no explanation or extra text. " +
+                                            $"If no match exists, reply exactly with 'No Match'.";
+
+
+                                var gpt_response = await _gptClient.GetResultFromGPT(query);
+
+                                if (gpt_response!.choices.Any())
                                 {
-                                    // Extract href
-                                    IWebElement hrefElement = product.FindElement(By.XPath("./a"));
+                                    var firstResult = gpt_response!.choices.FirstOrDefault();
 
-                                    string href = hrefElement.GetAttribute("href");
+                                    var res = firstResult?.message.content!.Replace("\n", "").Split("  ");
 
-                                    // Extract the title
-                                    var titleElement = product.FindElement(By.XPath(".//h2[@class='ProductDetailsSection_title__JorAV']"));
-
-                                    // Extract the price
-                                    var priceElement = product.FindElement(By.XPath(".//strong[@class='Price_amount__2sXa7']"));
-
-                                    if (!string.IsNullOrEmpty(titleElement.Text))
+                                    if(res!= null && res.Length > 0)
                                     {
-                                        var first_part = dg.Name.Split(" ")[0];
-                                        if (AddingNoonLinkCondition(titleElement, first_part))
+
+                                        int index = noon_titles.IndexOf((res[0]));
+                                        if(index != -1)
                                         {
+                                            string price = noon_prices[index];
+                                            string baseUrl = noon_product_url[index];
                                             product_data.Add(new GoogleSearchResult
                                             {
-                                                Title = titleElement.Text,
-                                                BaseUrl = href,
+                                                Title = noon_titles[index],
+                                                BaseUrl = baseUrl,
                                                 CreationTime = DateTime.Now,
                                                 DGProductId = dg.Id,
                                                 Supplier = "Noon",
-                                                Price = priceElement.Text
+                                                Price = price
                                             });
-                                        }
 
+                                            _logger.LogInformation("SiteCrawlerService >> FetchNoonLinks >> UpdateGoogleSearchResultsAsync >> {Message}", new { Message = product_data });
+
+                                            await _dGProductRepository.UpdateGoogleSearchResultsAsync(dg.Id, product_data);
+                                        }
                                     }
 
-                                    _logger.LogInformation("Title: {Message}", new { Message = titleElement.Text });
-                                    _logger.LogInformation("Price: {Message}", new { Message = priceElement.Text });
-                                    _logger.LogInformation("Link: {Message}", new { Message = href });
+                                    _logger.LogInformation("SiteCrawlerService >> FetchNoonLinks >> GetResultFromGPT >> {Message}", new { Message = res });
                                 }
-
-                                await _dGProductRepository.UpdateGoogleSearchResultsAsync(dg.Id, product_data);
                             }
                         }
                         catch (NoSuchElementException ex)
