@@ -730,207 +730,156 @@ namespace DgLandCrawler.Services.SiteCrawler
         }
 
 
-        public async Task FetchNoonLinks()
+        public enum Supplier
+        {
+            Noon,
+            SharafDG
+        }
+
+        public async Task FetchSupplierLinks(Supplier supplier)
         {
             var productList = await _dGProductRepository.GetList();
 
-            using (var _driver = CreateDriver(9228, false))
+            using (var _driver = CreateDriver(supplier == Supplier.Noon ? 9228 : 9229, true))
             {
                 foreach (var dg in productList.Reverse())
                 {
-                    if (dg.GoogleResult != null && !dg.GoogleResult.Where(x => x.Supplier == "Noon").Any())
+                    if (dg.GoogleResult != null && !dg.GoogleResult.Any(x => x.Supplier == supplier.ToString()))
                     {
                         try
                         {
-                            var builder = new UriBuilder
-                            {
-                                Scheme = "https",
-                                Host = "www.noon.com",
-                                Path = "uae-en/search",
-                                Query = $"q={dg.Name}",
-                            };
-
+                            var builder = BuildSupplierUri(dg.Name, supplier);
                             _driver.Navigate().GoToUrl(builder.ToString());
 
-                            var seachResult = _driver.FindElements(By.XPath("//*[@id='catalog-page-container']/div/div[2]/div[2]/div[4]/div"));
+                            var searchResult = WaitForSearchResult(_driver, supplier);
+                            if (searchResult == null) continue;
 
-                            if (seachResult != null)
+                            var titles = ExtractTitles(searchResult, supplier);
+                            var prices = ExtractPrices(searchResult, supplier);
+                            var productUrls = ExtractProductUrls(searchResult, supplier);
+
+                            if (!titles.Any()) continue;
+                            var query = BuildMatchingQuery(dg.Name, titles);
+                            var gptResponse = await _gptClient.GetResultFromGPT(query);
+
+                            if (gptResponse?.choices.Any() == true)
                             {
-                                var product_data = new List<GoogleSearchResult>();
+                                var firstResult = gptResponse.choices.FirstOrDefault();
+                                var res = firstResult?.message.content?.Replace("\n", "").Split("  ");
 
-                                var titles = seachResult
-                                    .SelectMany(x => x.FindElements(By.XPath(".//h2[@class='ProductDetailsSection_title__JorAV']")))
-                                    .Select(e => e.Text)
-                                    .ToList();
-
-                                var prices = seachResult
-                                        .SelectMany(x => x.FindElements(By.XPath(".//strong[@class='Price_amount__2sXa7']")))
-                                        .Select(e => e.Text)
-                                        .ToList();
-
-                                var product_url = seachResult
-                                    .SelectMany(x => x.FindElements(By.XPath("./a")))
-                                    .Select(e => e.GetAttribute("href"))
-                                    .ToList();
-
-                                var query = $"I have a list of product titles: [{string.Join("; ", titles)}]. " +
-                                            $"My product title is: \"{dg.Name}\". " +
-                                            $"First, check for an exact match and return only the matched title. " +
-                                            $"If no exact match exists, find and return only the closest matching product title based on model, storage, and color. " +
-                                            $"Return only the product title, no explanation or extra text. " +
-                                            $"If no match exists, reply exactly with 'No Match'.";
-
-
-                                var gpt_response = await _gptClient.GetResultFromGPT(query);
-
-                                if (gpt_response!.choices.Any())
+                                if (res != null && res.Length > 0)
                                 {
-                                    var firstResult = gpt_response!.choices.FirstOrDefault();
-
-                                    var res = firstResult?.message.content!.Replace("\n", "").Split("  ");
-
-                                    if(res!= null && res.Length > 0)
+                                    int index = titles.IndexOf(res[0]);
+                                    if (index != -1)
                                     {
+                                        string price = supplier == Supplier.SharafDG ? prices[index].Replace("AED ", "") : prices[index];
 
-                                        int index = titles.IndexOf((res[0]));
-                                        if(index != -1)
+                                        var productData = new List<GoogleSearchResult>
                                         {
-                                            string price = prices[index];
-                                            string baseUrl = product_url[index];
-                                            product_data.Add(new GoogleSearchResult
+                                            new GoogleSearchResult
                                             {
                                                 Title = titles[index],
-                                                BaseUrl = baseUrl,
+                                                BaseUrl = productUrls[index],
                                                 CreationTime = DateTime.Now,
                                                 DGProductId = dg.Id,
-                                                Supplier = "Noon",
+                                                Supplier = supplier.ToString(),
                                                 Price = price
-                                            });
+                                            }
+                                        };
 
-                                            _logger.LogInformation("SiteCrawlerService >> FetchNoonLinks >> UpdateGoogleSearchResultsAsync >> {Message}", new { Message = product_data });
-
-                                            await _dGProductRepository.UpdateGoogleSearchResultsAsync(dg.Id, product_data);
-                                        }
+                                        _logger.LogInformation("FetchSupplierLinks >> UpdateGoogleSearchResultsAsync >> {Message}", new { Message = productData });
+                                        await _dGProductRepository.UpdateGoogleSearchResultsAsync(dg.Id, productData);
                                     }
-
-                                    _logger.LogInformation("SiteCrawlerService >> FetchNoonLinks >> GetResultFromGPT >> {Message}", new { Message = res });
                                 }
                             }
                         }
-                        catch (NoSuchElementException ex)
-                        {
-                            _logger.LogError("An error occurred: {Message}", new { ex.Message });
-                        }
                         catch (Exception ex)
                         {
-                            _logger.LogError("An error occurred: {Message}", new { ex.Message });
+                            _logger.LogError("An error occurred: {Message}", new { Message = ex.Message });
                         }
                     }
                 }
             }
         }
 
-        public async Task FetchSharafDGLinks()
+        private UriBuilder BuildSupplierUri(string productName, Supplier supplier)
         {
-            var productList = await _dGProductRepository.GetList();
-
-            using (var _driver = CreateDriver(9229, false))
+            if (supplier == Supplier.Noon)
             {
-                foreach (var dg in productList.Reverse())
-                {
-                    if (dg.GoogleResult != null && !dg.GoogleResult.Where(x => x.Supplier == "SharafDG").Any())
-                    {
-                        try
-                        {
-                            var builder = new UriBuilder
-                            {
-                                Scheme = "https",
-                                Host = "uae.sharafdg.com",
-                                Query = $"q={dg.Name}&post_type=product",
-                            };
-
-                            _driver.Navigate().GoToUrl(builder.ToString());
-
-                            WebDriverWait wait = new WebDriverWait(_driver, TimeSpan.FromSeconds(3));
-                            wait.Until(SeleniumExtras.WaitHelpers.ExpectedConditions.ElementIsVisible(By.XPath("//div[@id='hits']")));
-
-                            var seachResult = _driver.FindElements(By.XPath("//div[@id='hits']"));
-
-                            if (seachResult != null)
-                            {
-                                var product_data = new List<GoogleSearchResult>();
-
-
-                                var titles = seachResult
-                                    .SelectMany(x => x.FindElements(By.XPath(".//h4[@class='name']")))
-                                    .Select(e => e.Text)
-                                    .ToList();
-
-                                var prices = seachResult
-                                        .SelectMany(x => x.FindElements(By.XPath(".//div[@class='price']")))
-                                        .Select(e => e.Text)
-                                        .ToList();
-
-                                var product_url = seachResult
-                                    .SelectMany(x => x.FindElements(By.XPath(".//a")))
-                                    .Select(e => e.GetAttribute("href"))
-                                    .ToList();
-
-                                var query = $"I have a list of product titles: [{string.Join("; ", titles)}]. " +
-                                            $"My product title is: \"{dg.Name}\". " +
-                                            $"First, check for an exact match and return only the matched title. " +
-                                            $"If no exact match exists, find and return only the closest matching product title based on model, storage, and color. " +
-                                            $"Return only the product title, no explanation or extra text. " +
-                                            $"If no match exists, reply exactly with 'No Match'.";
-
-
-                                var gpt_response = await _gptClient.GetResultFromGPT(query);
-
-                                if (gpt_response!.choices.Any())
-                                {
-                                    var firstResult = gpt_response!.choices.FirstOrDefault();
-
-                                    var res = firstResult?.message.content!.Replace("\n", "").Split("  ");
-
-                                    if (res != null && res.Length > 0)
-                                    {
-
-                                        int index = titles.IndexOf((res[0]));
-                                        if (index != -1)
-                                        {
-                                            string price = prices[index];
-                                            string baseUrl = product_url[index];
-                                            product_data.Add(new GoogleSearchResult
-                                            {
-                                                Title = titles[index],
-                                                BaseUrl = baseUrl,
-                                                CreationTime = DateTime.Now,
-                                                DGProductId = dg.Id,
-                                                Supplier = "SharafDG",
-                                                Price = price.Replace("AED ", "")
-                                            });
-
-                                            _logger.LogInformation("SiteCrawlerService >> FetchSharafDGLinks >> UpdateGoogleSearchResultsAsync >> {Message}", new { Message = product_data });
-
-                                            await _dGProductRepository.UpdateGoogleSearchResultsAsync(dg.Id, product_data);
-                                        }
-                                    }
-
-                                    _logger.LogInformation("SiteCrawlerService >> FetchSharafDGLinks >> GetResultFromGPT >> {Message}", new { Message = res });
-                                }
-                            }
-                        }
-                        catch (NoSuchElementException ex)
-                        {
-                            _logger.LogError("An error occurred: {Message}", new { ex.Message });
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogError("An error occurred: {Message}", new { ex.Message });
-                        }
-                    }
-                }
+                return new UriBuilder("https", "www.noon.com") { Path = "uae-en/search", Query = $"q={productName}" };
             }
+            else // SharafDG
+            {
+                return new UriBuilder("https", "uae.sharafdg.com") { Query = $"q={productName}&post_type=product" };
+            }
+        }
+
+        private IReadOnlyCollection<IWebElement> WaitForSearchResult(IWebDriver driver, Supplier supplier)
+        {
+            try
+            {
+                if (supplier == Supplier.SharafDG)
+                {
+                    WebDriverWait wait = new WebDriverWait(driver, TimeSpan.FromSeconds(3));
+                    wait.Until(SeleniumExtras.WaitHelpers.ExpectedConditions.ElementIsVisible(By.XPath("//div[@id='hits']")));
+                }
+
+                return driver.FindElements(By.XPath(GetSearchResultXPath(supplier)));
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private string GetSearchResultXPath(Supplier supplier)
+        {
+            return supplier == Supplier.Noon
+                ? "//*[@id='catalog-page-container']/div/div[2]/div[2]/div[4]/div"
+                : "//div[@id='hits']";
+        }
+
+        private List<string> ExtractTitles(IReadOnlyCollection<IWebElement> searchResult, Supplier supplier)
+        {
+            string titleXPath = supplier == Supplier.Noon
+                ? ".//h2[@class='ProductDetailsSection_title__JorAV']"
+                : ".//h4[@class='name']";
+
+            return searchResult
+                .SelectMany(x => x.FindElements(By.XPath(titleXPath)))
+                .Select(e => e.Text)
+                .ToList();
+        }
+
+        private List<string> ExtractPrices(IReadOnlyCollection<IWebElement> searchResult, Supplier supplier)
+        {
+            string priceXPath = supplier == Supplier.Noon
+                ? ".//strong[@class='Price_amount__2sXa7']"
+                : ".//div[@class='price']";
+
+            return searchResult
+                .SelectMany(x => x.FindElements(By.XPath(priceXPath)))
+                .Select(e => e.Text)
+                .ToList();
+        }
+
+        private List<string> ExtractProductUrls(IReadOnlyCollection<IWebElement> searchResult, Supplier supplier)
+        {
+            // Both Noon and SharafDG seem to have direct anchor links inside each item
+            return searchResult
+                .SelectMany(x => x.FindElements(By.XPath("./a")))
+                .Select(e => e.GetAttribute("href"))
+                .ToList();
+        }
+
+        private string BuildMatchingQuery(string productTitle, List<string> titles)
+        {
+            return $"I have a list of product titles: [{string.Join("; ", titles)}]. " +
+                   $"My product title is: \"{productTitle}\". " +
+                   $"First, check for an exact match and return only the matched title. " +
+                   $"If no exact match exists, find and return only the closest matching product title based on model, storage, and color. " +
+                   $"Return only the product title, no explanation or extra text. " +
+                   $"If no match exists, reply exactly with 'No Match'.";
         }
 
         private Task AdminLogin(AdminPanelCredential credential, IWebDriver _driver)
