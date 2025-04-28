@@ -1,5 +1,6 @@
 ﻿using DgLandCrawler.Services.SiteCrawler;
 using MediatR;
+using static DgLandCrawler.Services.SiteCrawler.SiteCrawlerService;
 
 namespace DgLandCrawler.Data.Handlers
 {
@@ -15,10 +16,10 @@ namespace DgLandCrawler.Data.Handlers
                     await _siteCrawlerService.StartCaching();
                     break;
                 case CrawlRequest.FetchNoonLinks:
-                    await _siteCrawlerService.FetchNoonLinks();
+                    await _siteCrawlerService.FetchSupplierLinks(Supplier.Noon);
                     break;
                 case CrawlRequest.FetchSharafDGLinks:
-                    await _siteCrawlerService.FetchSharafDGLinks();
+                    await _siteCrawlerService.FetchSupplierLinks(Supplier.SharafDG);
                     break;
                 case CrawlRequest.CrawlSuppliers:
                     await _siteCrawlerService.CrawlSuppliers();
