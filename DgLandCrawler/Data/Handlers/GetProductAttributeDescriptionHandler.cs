@@ -9,7 +9,7 @@ using Microsoft.AspNetCore.Http;
 namespace DgLandCrawler.Data.Handlers
 {
     public class GetProductAttributeDescriptionHandler : 
-        IRequestHandler<GetProductAttributeRequest, GetProductAttributeResponse>
+        IRequestHandler<GetProductAttributeRequest, MemoryStream>
     {
         private readonly IChatGPTService _gptService;
 
@@ -19,7 +19,7 @@ namespace DgLandCrawler.Data.Handlers
         }
 
 
-        public async Task<GetProductAttributeResponse> Handle(GetProductAttributeRequest request, CancellationToken cancellationToken)
+        public async Task<MemoryStream> Handle(GetProductAttributeRequest request, CancellationToken cancellationToken)
         {
             using var stream = request.FormFile.OpenReadStream();
 
@@ -31,17 +31,13 @@ namespace DgLandCrawler.Data.Handlers
 
             List<WordpressProduct> updatedRecords = await _gptService.GetProductAttributes(records);
 
-            return new GetProductAttributeResponse(await CSVHelper.ExportWordpressProducts(updatedRecords));
+            return await CSVHelper.ExportWordpressProducts(updatedRecords);
         }
     }
 
-    public record struct GetProductAttributeRequest(IFormFile FormFile) : IRequest<GetProductAttributeResponse>
+    public record struct GetProductAttributeRequest(IFormFile FormFile) : IRequest<MemoryStream>
     {
         public IFormFile FormFile = FormFile;
     }
 
-    public record struct GetProductAttributeResponse(MemoryStream MemoryStream) : IRequest
-    {
-        public MemoryStream MemoryStream = MemoryStream;
-    }
 }

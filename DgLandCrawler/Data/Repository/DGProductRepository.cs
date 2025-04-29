@@ -117,5 +117,37 @@ namespace DgLandCrawler.Data.Repository
 
             return new DGView();
         }
+
+
+        public async Task<IList<PriceViewModel>> GetUpdatedCrawledPriceList(CancellationToken token = default)
+        {
+            using var cmd = _context.Database.GetDbConnection().CreateCommand();
+            cmd.CommandType = System.Data.CommandType.StoredProcedure;
+            cmd.CommandText = "dbo.GetUpdatedCrawledPriceList";
+
+            await _context.Database.OpenConnectionAsync(token);
+            var products = new List<PriceViewModel>();
+
+            using var reader = await cmd.ExecuteReaderAsync(token);
+            while (await reader.ReadAsync(token)) {
+                int i = 0;
+                products.Add(new PriceViewModel
+                {
+                    DgLandId = reader.GetInt32(0),
+                    CreationTime = reader.GetDateTime(1),
+                    Category = reader.GetString(2),
+                    Name = reader.GetString(3),
+                    Title = reader.GetString(4),
+                    BaseUrl = reader.GetString(5),
+                    Supplier = reader.GetString(6),
+                    Price = reader.GetString(7),
+                    RegularPrice = reader.GetInt32(8),
+                    SalePrice = reader.GetInt32(9)
+                });
+            }
+
+            return products;
+
+        }
     }
 }

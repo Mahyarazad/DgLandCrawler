@@ -100,12 +100,13 @@ public static class ProductEndpoints
         }).WithSummary("Update Missing Products")
             .WithDescription("Updates missing products in the database. Requires admin panel credentials. This service downloads csv file from Wordpress and find the missing products in the database and add them");
 
-        productEndpoints.MapGet("cache-products", async ([FromServices] IMediator mediator) =>
+        productEndpoints.MapGet("get-updated-supplier-prices", async ([FromServices] IMediator mediator) =>
         {
             try
             {
-                await mediator.Send(new CrawlerQuery(CrawlRequest.CacheProducts));
-                return Results.NoContent();
+                var memStream = await mediator.Send(new GetUpdatedPriceRequest());
+                return Results.File(memStream, "text/csv", $"updated-supplier-prices-{DateTime.Now}.csv");
+
             }
             catch (KeyNotFoundException ex)
             {
@@ -125,14 +126,12 @@ public static class ProductEndpoints
             if (file == null || file.Length == 0)
                 return Results.BadRequest("CSV file is required.");
 
-            var response = await mediator.Send(new GetProductAttributeRequest(file));
+            var memStream = await mediator.Send(new GetProductAttributeRequest(file));
 
-            return Results.File(response.MemoryStream, "text/csv", "wordpress-products.csv");
+            return Results.File(memStream, "text/csv", $"updated-wordpress-products-{DateTime.Now}.csv");
 
         }).Accepts<IFormFile>("multipart/form-data", "file")
         .WithSummary("Add Additional Information, Short Product Description and Product Discription(What's in The Box)")
         .WithDescription("Use Postman and attach your csv file (Should be the Wordpress template with full columns, and Post it. This service sends requests to ChatGPT API so for each record it could takes up to 20 seconds)");
     }
-
-    
 }

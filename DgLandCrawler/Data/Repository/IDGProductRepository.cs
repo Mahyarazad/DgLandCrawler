@@ -19,5 +19,7 @@ namespace DgLandCrawler.Data.Repository
         Task Update(DGProductData data);
 
         IQueryable<DGProductData> GetListExlcudeMeta();
+
+        Task<IList<PriceViewModel>> GetUpdatedCrawledPriceList(CancellationToken cancellationToken = default);
     }
 }

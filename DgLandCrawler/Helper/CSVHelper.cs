@@ -1,7 +1,9 @@
 ﻿using CsvHelper;
 using CsvHelper.Configuration;
 using DgLandCrawler.Models.DTO;
+using Npgsql.Internal;
 using System.Globalization;
+using System.IO;
 using System.Text;
 
 namespace DgLandCrawler.Helper
@@ -186,6 +188,34 @@ namespace DgLandCrawler.Helper
             await writer.FlushAsync();
             stream.Position = 0; // Reset stream position for reading/download
             return stream;
+        }
+
+
+        public static async Task<MemoryStream> GetMemoryStreamAsync<T>(IList<T> model)
+        {
+            var memStream = new MemoryStream();
+            // IMPORTANT: leave the stream open after CsvWriter is disposed
+            await using (var writer = new StreamWriter(memStream, Encoding.UTF8, 1024, leaveOpen: true))
+            await using (var csv = new CsvWriter(writer, CultureInfo.InvariantCulture))
+            {
+
+                csv.WriteHeader<T>();
+                await csv.NextRecordAsync();
+
+                foreach (var p in model)
+                {
+                    csv.WriteRecord(p);
+                    await csv.NextRecordAsync();
+                }
+
+                await writer.FlushAsync();
+            }
+
+            // 3) Reset position so ASP.NET reads from the start
+            memStream.Position = 0;
+
+
+            return memStream;
         }
 
     }
