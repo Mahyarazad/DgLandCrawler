@@ -15,23 +15,20 @@ using DgLandCrawler.Models.DTO;
 using OpenQA.Selenium.Support.UI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
+using Serilog;
 
 
 namespace DgLandCrawler.Services.SiteCrawler
 {
     public class SiteCrawlerService : ISiteCrawlerService
     {
-        private readonly ILogger<SiteCrawlerService> _logger;
-        private readonly IDbUpdater _dbUpdater;
         private readonly IGptClient _gptClient;
         private readonly IDGProductRepository _dGProductRepository;
         private readonly AppConfig _config;
 
-        public SiteCrawlerService(ILogger<SiteCrawlerService> logger, IDbUpdater dbUpdater, IOptions<AppConfig> _appConfig,
+        public SiteCrawlerService(IOptions<AppConfig> _appConfig,
             IGptClient gptClient, IDGProductRepository dGProductRepository, IConfiguration config)
         {
-            _logger = logger;
-            _dbUpdater = dbUpdater;
             _gptClient = gptClient;
             _dGProductRepository = dGProductRepository;
             _config = _appConfig.Value;
@@ -92,13 +89,13 @@ namespace DgLandCrawler.Services.SiteCrawler
                                     {
                                         try
                                         {
-                                            _logger.LogInformation("Caching >>  Url >> {Message}", new { Message = childLink });
+                                            Log.Information("Caching >>  Url >> {Message}", new { Message = childLink });
                                             __driver.Navigate().GoToUrl(childLink);
                                         }
                                         catch (Exception ex)
                                         {
-                                            _logger.LogError("Inner navigation error: {Message}", ex.Message);
-                                            _logger.LogError("StackTrace: {StackTrace}", ex.StackTrace);
+                                            Log.Error("Inner navigation error: {Message}", ex.Message);
+                                            Log.Error("StackTrace: {StackTrace}", ex.StackTrace);
                                         }
 
                                     }
@@ -112,9 +109,9 @@ namespace DgLandCrawler.Services.SiteCrawler
                 }
                 catch (Exception e)
                 {
-                    _logger.LogError("An error occurred: {Message}", new { Message = e.Message });
+                    Log.Error("An error occurred: {Message}", new { Message = e.Message });
 
-                    _logger.LogError("An error occurred: {StackTrace}", new { StackTrace = e.StackTrace });
+                    Log.Error("An error occurred: {StackTrace}", new { StackTrace = e.StackTrace });
                 }
             }
         }
@@ -147,9 +144,9 @@ namespace DgLandCrawler.Services.SiteCrawler
                 }
                 catch (Exception e)
                 {
-                    _logger.LogError("An error occurred: {Message}", new { Message = e.Message });
+                    Log.Error("An error occurred: {Message}", new { Message = e.Message });
 
-                    _logger.LogError("An error occurred: {StackTrace}", new { StackTrace = e.StackTrace });
+                    Log.Error("An error occurred: {StackTrace}", new { StackTrace = e.StackTrace });
                 }
 
             }
@@ -177,9 +174,9 @@ namespace DgLandCrawler.Services.SiteCrawler
                 }
                 catch (Exception e)
                 {
-                    _logger.LogError("An error occurred: {Message}", new { Message = e.Message });
+                    Log.Error("An error occurred: {Message}", new { Message = e.Message });
 
-                    _logger.LogError("An error occurred: {StackTrace}", new { StackTrace = e.StackTrace });
+                    Log.Error("An error occurred: {StackTrace}", new { StackTrace = e.StackTrace });
                 }
 
                 var doc = new HtmlDocument();
@@ -225,17 +222,17 @@ namespace DgLandCrawler.Services.SiteCrawler
                         }
                         catch (NoSuchElementException e)
                         {
-                            _logger.LogError("An error occurred: {Message}", new { Message = e.Message });
+                            Log.Error("An error occurred: {Message}", new { Message = e.Message });
 
                             _driver.FindElement(By.ClassName("media-modal-close")).Click();
 
-                            _logger.LogError("An error occurred: {StackTrace}", new { StackTrace = e.StackTrace });
+                            Log.Error("An error occurred: {StackTrace}", new { StackTrace = e.StackTrace });
                         }
                         catch (Exception e)
                         {
-                            _logger.LogError("An error occurred: {Message}", new { Message = e.Message });
+                            Log.Error("An error occurred: {Message}", new { Message = e.Message });
 
-                            _logger.LogError("An error occurred: {StackTrace}", new { StackTrace = e.StackTrace });
+                            Log.Error("An error occurred: {StackTrace}", new { StackTrace = e.StackTrace });
                         }
                     }
                 }
@@ -262,7 +259,7 @@ namespace DgLandCrawler.Services.SiteCrawler
             {
                 var start = Stopwatch.GetTimestamp();
 
-                _logger.LogInformation("Start processing item: {Message}", item.Name);
+                Log.Information("Start processing item: {Message}", item.Name);
                 _driver.Navigate().GoToUrl(item.Url);
                 var elem = _driver.FindElement(By.XPath("//div[@class='woocommerce-product-gallery__wrapper']"));
 
@@ -411,12 +408,12 @@ namespace DgLandCrawler.Services.SiteCrawler
 
                 var delta = Stopwatch.GetElapsedTime(start, Stopwatch.GetTimestamp());
 
-                _logger.LogInformation("Finish processing item: {Message} ==> It tootk {Delta}", item.Name, delta);
+                Log.Information("Finish processing item: {Message} ==> It tootk {Delta}", item.Name, delta);
 
             }
             catch (Exception e)
             {
-                _logger.LogError("Something went wrong, {Message}", e.Message);
+                Log.Error("Something went wrong, {Message}", e.Message);
             }
 
         }
@@ -455,7 +452,7 @@ namespace DgLandCrawler.Services.SiteCrawler
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError("An error occurred: {Message}", ex.Message);
+                    Log.Error("An error occurred: {Message}", ex.Message);
                 }
 
             }
@@ -478,7 +475,7 @@ namespace DgLandCrawler.Services.SiteCrawler
 
                 int randomNumber = random.Next(2, 7);
 
-                _logger.LogInformation("Start adding review {ProductName}", product.Name);
+                Log.Information("Start adding review {ProductName}", product.Name);
 
                 for (int i = 0; i < randomNumber; i++)
                 {
@@ -492,7 +489,7 @@ namespace DgLandCrawler.Services.SiteCrawler
 
                             var res = firstResult?.message.content!.Replace("\n", "").Split("  ");
 
-                            _logger.LogInformation("GPT Result {Res}", firstResult?.message.content);
+                            Log.Information("GPT Result {Res}", firstResult?.message.content);
 
                             var gptReview = new GptReview
                             {
@@ -502,18 +499,18 @@ namespace DgLandCrawler.Services.SiteCrawler
                                 Email = res[3].Replace("-", "").Trim()
                             };
 
-                            _logger.LogInformation("Adding Review for {ProductName}", product.Name);
+                            Log.Information("Adding Review for {ProductName}", product.Name);
 
                             await AddReview(gptReview);
 
-                            _logger.LogInformation("Review Added {ProductName}", product.Name);
+                            Log.Information("Review Added {ProductName}", product.Name);
 
                             await Task.Delay(8000);
 
                         }
                         catch (Exception ex)
                         {
-                            _logger.LogError("CaptureSubmit {Error}", ex.Message);
+                            Log.Error("CaptureSubmit {Error}", ex.Message);
                         }
                     }
                 }
@@ -550,7 +547,7 @@ namespace DgLandCrawler.Services.SiteCrawler
                     ((IJavaScriptExecutor)_driver).ExecuteScript("arguments[0].click();", submit);
                     await Task.Delay(100);
                 }
-                catch (Exception ex) { _logger.LogError("AddReview {Error}", ex.Message); }
+                catch (Exception ex) { Log.Error("AddReview {Error}", ex.Message); }
             }
                 
         }
@@ -593,7 +590,7 @@ namespace DgLandCrawler.Services.SiteCrawler
 
                 //        var searchElem = _driver.FindElement(By.XPath("//input[@data-qa='txt_searchBar']"));
 
-                //        _logger.LogInformation("Search Element: {Message}", searchElem);
+                //        Log.Information("Search Element: {Message}", searchElem);
                 //        var clear = _driver.FindElements(By.TagName("button"));
                 //        clear[2].Click();
 
@@ -624,9 +621,9 @@ namespace DgLandCrawler.Services.SiteCrawler
                 //                    {
 
                 //                        var amountElement = elem.FindElement(By.ClassName("amount"));
-                //                        _logger.LogInformation("Product Detail: {Message}", amountElement.Text);
+                //                        Log.Information("Product Detail: {Message}", amountElement.Text);
 
-                //                        _logger.LogInformation("Product Detail: {Message}", productNameElement.GetAttribute("title"));
+                //                        Log.Information("Product Detail: {Message}", productNameElement.GetAttribute("title"));
 
 
 
@@ -645,7 +642,7 @@ namespace DgLandCrawler.Services.SiteCrawler
                 //                }
                 //                catch(Exception e)
                 //                {
-                //                    _logger.LogError("An error occurred: {Message}", e.Message);
+                //                    Log.Error("An error occurred: {Message}", e.Message);
                 //                }
                 //            }
 
@@ -655,7 +652,7 @@ namespace DgLandCrawler.Services.SiteCrawler
                 //    }
                 //    catch(Exception e)
                 //    {
-                //        _logger.LogError("An error occurred: {Message}", e.Message);
+                //        Log.Error("An error occurred: {Message}", e.Message);
                 //    }
 
                 //}
@@ -722,7 +719,7 @@ namespace DgLandCrawler.Services.SiteCrawler
                         }
                         catch (Exception e)
                         {
-                            _logger.LogError("Something went wrong: {error}", e.Message);
+                            Log.Error("Something went wrong: {error}", e.Message);
                         }
                     }
                 }
@@ -787,7 +784,7 @@ namespace DgLandCrawler.Services.SiteCrawler
                                             }
                                         };
 
-                                        _logger.LogInformation("FetchSupplierLinks >> UpdateGoogleSearchResultsAsync >> {Message}", new { Message = productData });
+                                        Log.Information("FetchSupplierLinks >> UpdateGoogleSearchResultsAsync >> {Message}", new { Message = productData });
                                         await _dGProductRepository.UpdateGoogleSearchResultsAsync(dg.Id, productData);
                                     }
                                 }
@@ -795,7 +792,7 @@ namespace DgLandCrawler.Services.SiteCrawler
                         }
                         catch (Exception ex)
                         {
-                            _logger.LogError("An error occurred: {Message}", new { Message = ex.Message });
+                            Log.Error("An error occurred: {Message}", new { Message = ex.Message });
                         }
                     }
                 }

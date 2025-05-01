@@ -35,17 +35,25 @@ internal class Program
             .WriteTo.Console(
                 restrictedToMinimumLevel: Serilog.Events.LogEventLevel.Information,
                 outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}")
+            .WriteTo.File(
+                    path: $"Logs/log-.txt",
+                    rollingInterval: RollingInterval.Day,
+                    restrictedToMinimumLevel: Serilog.Events.LogEventLevel.Verbose,
+                    outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}"
+                )
             .CreateLogger();
 
         try
         {
             var builder = WebApplication.CreateBuilder(args);
+            Log.Information("Application starting...");
 
             builder.Services.AddHttpClient();
             builder.Services.AddHangfire(x=>
             {
                 x.UseSqlServerStorage(builder.Configuration.GetConnectionString("MSSqlServer"));
             });
+
             builder.Services.AddHangfireServer();
             builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
 
@@ -84,11 +92,11 @@ internal class Program
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen(options =>
             {
-                options.SwaggerDoc("v1", new OpenApiInfo { Title = "Your API", Version = "v1" });
+                options.SwaggerDoc("v1", new OpenApiInfo { Title = "DGLand Service API", Version = "v1" });
 
                 options.SupportNonNullableReferenceTypes();
 
-                options.MapType<IFormFile>(() => new Microsoft.OpenApi.Models.OpenApiSchema
+                options.MapType<IFormFile>(() => new OpenApiSchema
                 {
                     Type = "string",
                     Format = "binary"
@@ -101,7 +109,7 @@ internal class Program
             app.UseSwagger();
             app.UseSwaggerUI(options =>
             {
-                options.SwaggerEndpoint("/swagger/v1/swagger.json", "Your API v1");
+                options.SwaggerEndpoint("/swagger/v1/swagger.json", "DGLand Service API v1");
                 options.RoutePrefix = string.Empty; // Set the Swagger UI at the root URL
             });
 
@@ -114,14 +122,16 @@ internal class Program
             app.MapBackgroundJobEndpoints();
 
             app.Run();
+
         }
         catch (Exception ex)
         {
-            Log.Fatal(ex, "Application failed to start"); // Log fatal errors
+            Log.Fatal(ex, "Application failed to start");
         }
         finally
         {
-            Log.CloseAndFlush(); // Ensure logs are flushed
+            // Ensure logs are flushed
+            Log.CloseAndFlush();
         }
     }
 }

@@ -4,18 +4,17 @@ using Microsoft.Extensions.Logging;
 using DgLandCrawler.Models;
 using DgLandCrawler.Models.DTO;
 using System.Text;
+using Serilog;
 
 namespace DgLandCrawler.Services.SiteCrawler
 {
     public class ChatGPTService : IChatGPTService
     {
-        private readonly ILogger<ChatGPTService> _logger;
         private readonly IGptClient _gptClient;
         private readonly IDGProductRepository _dGProductRepository;
 
-        public ChatGPTService(ILogger<ChatGPTService> logger, IGptClient gptClient, IDGProductRepository dGProductRepository)
+        public ChatGPTService(IGptClient gptClient, IDGProductRepository dGProductRepository)
         {
-            _logger = logger;
             _gptClient = gptClient;
             _dGProductRepository = dGProductRepository;
         }
@@ -41,7 +40,7 @@ namespace DgLandCrawler.Services.SiteCrawler
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError("Exception >> GetProductAttributes >> {Message}", new { Message = ex.Message });
+                    Log.Error("Exception >> GetProductAttributes >> {Message}", new { Message = ex.Message });
                 }
             }
 
@@ -56,9 +55,9 @@ namespace DgLandCrawler.Services.SiteCrawler
                 var specifications = new Dictionary<string, string>();
                 var features = new Dictionary<string, string>();
 
-                _logger.LogInformation("GetProductAttributes >> Product Name >>  {Input}", new { Input = dg.Name });
+                Log.Information("GetProductAttributes >> Product Name >>  {Input}", new { Input = dg.Name });
 
-                _logger.LogInformation("GetProductAttributes >> GPT Response >>  {Input}", new { Input = input });
+                Log.Information("GetProductAttributes >> GPT Response >>  {Input}", new { Input = input });
 
                 // Split the input into specifications and features sections
                 string[] sections = input.Split("###", StringSplitOptions.None);
@@ -124,12 +123,12 @@ namespace DgLandCrawler.Services.SiteCrawler
 
                     await _dGProductRepository.AddAsync(dg);
 
-                    _logger.LogInformation(dg.Name);
+                    Log.Information(dg.Name);
 
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError("Exception >> GetProductSearchKeywords >> {Message}", new { Message = ex.Message });
+                    Log.Error("Exception >> GetProductSearchKeywords >> {Message}", new { Message = ex.Message });
                 }
             }
         }

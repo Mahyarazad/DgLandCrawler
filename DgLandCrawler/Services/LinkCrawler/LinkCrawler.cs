@@ -1,23 +1,21 @@
-﻿using Microsoft.Extensions.Logging;
-using OpenQA.Selenium.Chrome;
+﻿using OpenQA.Selenium.Chrome;
 using OpenQA.Selenium;
 using OpenQA.Selenium.DevTools;
 using DgLandCrawler.Models;
 using OpenQA.Selenium.Support.Extensions;
 using DgLandCrawler.Data.Repository;
+using Log = Serilog.Log;
 
 
 namespace DgLandCrawler.Services.LinkCrawler
 {
     public class LinkCrawler : ILinkCrawler, IDisposable
     {
-        private readonly ILogger<LinkCrawler> _logger;
         private readonly ChromeOptions _options;
         private readonly IWebDriver _driver;
         private readonly IDGProductRepository _dGProductRepository;
-        public LinkCrawler(ILogger<LinkCrawler> logger, IDGProductRepository dGProductRepository)
+        public LinkCrawler(IDGProductRepository dGProductRepository)
         {
-            _logger = logger;
             _options = new ChromeOptions();
             _options.AddArgument("--start-maximized");
             _options.AddArgument("--remote-debugging-port=9222");
@@ -72,7 +70,7 @@ namespace DgLandCrawler.Services.LinkCrawler
             }
             catch(Exception e)
             {
-                _logger.LogError("An error occurred: {Message}", e.Message);
+                Log.Error("An error occurred: {Message}", e.Message);
             }
         }
 

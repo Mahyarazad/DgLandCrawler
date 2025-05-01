@@ -1,6 +1,5 @@
 ﻿using DgLandCrawler.Models;
 using Microsoft.Extensions.Options;
-using Microsoft.Identity.Client;
 using System.Text;
 
 namespace DgLandCrawler.Services.GptClient
