@@ -1,7 +1,7 @@
 ﻿using DgLandCrawler.Services;
 using DgLandCrawler.Services.SiteCrawler;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
+using Serilog;
 
 namespace DgLandCrawler.BackgroundJobs
 {
@@ -18,14 +18,13 @@ namespace DgLandCrawler.BackgroundJobs
         {
             using var scope = _serviceProvider.CreateScope();
             var siteCrawlerService = scope.ServiceProvider.GetRequiredService<ISiteCrawlerService>();
-            var logger = scope.ServiceProvider.GetRequiredService<ILogger<PriceCrawlerJob>>();
             var jobControlService = scope.ServiceProvider.GetRequiredService<JobControlService>();
 
             try
             {
                 if (!jobControlService.Should_Run)
                 {
-                    logger.LogInformation("PriceCrawlerJob >> Job execution skipped because it was stopped.");
+                    Log.Information("PriceCrawlerJob >> Job execution skipped because it was stopped.");
                     return;
                 }
 
@@ -33,11 +32,11 @@ namespace DgLandCrawler.BackgroundJobs
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "PriceCrawlerJob >> Exception occurred during execution.");
+                Log.Error(ex, "PriceCrawlerJob >> Exception occurred during execution.");
             }
             finally
             {
-                logger.LogInformation("PriceCrawlerJob >> End");
+                Log.Information("PriceCrawlerJob >> End");
             }
         }
     }

@@ -1,6 +1,5 @@
 ﻿using DgLandCrawler.Data.Repository;
 using DgLandCrawler.Services.GptClient;
-using Microsoft.Extensions.Logging;
 using DgLandCrawler.Models;
 using DgLandCrawler.Models.DTO;
 using System.Text;

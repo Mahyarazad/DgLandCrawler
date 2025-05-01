@@ -1,7 +1,6 @@
 ﻿using OpenQA.Selenium.Chrome;
 using OpenQA.Selenium;
 using HtmlAgilityPack;
-using Microsoft.Extensions.Logging;
 using DgLandCrawler.Models;
 using OpenQA.Selenium.Interactions;
 using DgLandCrawler.Services.GptClient;
