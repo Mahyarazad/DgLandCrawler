@@ -1,8 +1,7 @@
-﻿using RabbitMQ.Client.Events;
-
+﻿
 namespace DgLandCrawler.Services.MessageBus.Consumer
 {
-    public interface IConsumerHandler
+    public interface IRabbitConsumer
     {
         Task ConsumeAsync<T>(string queue);
     }

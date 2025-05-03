@@ -104,11 +104,11 @@ internal class Program
                 }
                 );
 
-            builder.Services.AddScoped<IConsumerHandler, ConsumerHandler>(
+            builder.Services.AddScoped<IRabbitConsumer, RabbitConsumer>(
                 sp =>
                 {
                    var connection = sp.GetRequiredService<IConnection>();
-                    return new ConsumerHandler(connection.CreateChannelAsync().GetAwaiter().GetResult());
+                    return new RabbitConsumer(connection.CreateChannelAsync().GetAwaiter().GetResult());
                 }
             );
 

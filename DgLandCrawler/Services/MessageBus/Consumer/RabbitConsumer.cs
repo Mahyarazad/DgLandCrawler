@@ -3,10 +3,10 @@ using RabbitMQ.Client.Events;
 
 namespace DgLandCrawler.Services.MessageBus.Consumer
 {
-    public class ConsumerHandler : IConsumerHandler
+    public class RabbitConsumer : IRabbitConsumer
     {   
         private readonly IChannel _channel;
-        public ConsumerHandler(IChannel channel)
+        public RabbitConsumer(IChannel channel)
         {
             _channel = channel ?? throw new ArgumentNullException(nameof(channel));
         }
