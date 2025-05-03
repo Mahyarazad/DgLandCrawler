@@ -20,6 +20,7 @@ using DgLandCrawler.Endpoints;
 using DgLandCrawler.BackgroundJobs;
 using RabbitMQ.Client;
 using DgLandCrawler.Services.MessageBus.Publisher;
+using DgLandCrawler.Services.MessageBus.Consumer;
 internal class Program
 {
     private static void Main(string[] args)
@@ -102,6 +103,14 @@ internal class Program
                     return new RabbitPublisher(connection.CreateChannelAsync().GetAwaiter().GetResult());
                 }
                 );
+
+            builder.Services.AddScoped<IConsumerHandler, ConsumerHandler>(
+                sp =>
+                {
+                   var connection = sp.GetRequiredService<IConnection>();
+                    return new ConsumerHandler(connection.CreateChannelAsync().GetAwaiter().GetResult());
+                }
+            );
 
             builder.Services.AddAntiforgery();
 
