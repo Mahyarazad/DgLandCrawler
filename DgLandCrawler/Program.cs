@@ -18,6 +18,8 @@ using Hangfire;
 using DgLandCrawler.Services;
 using DgLandCrawler.Endpoints;
 using DgLandCrawler.BackgroundJobs;
+using RabbitMQ.Client;
+using DgLandCrawler.Services.MessageBus.Publisher;
 internal class Program
 {
     private static void Main(string[] args)
@@ -85,6 +87,21 @@ internal class Program
             builder.Services.AddTransient<IDbUpdater, DbUpdater>();
             builder.Services.AddTransient<ILinkCrawler, LinkCrawler>();
 
+            builder.Services.AddSingleton(
+                sp =>
+                {
+                    ConnectionFactory _connectionFactory = new() { HostName = "localhost" };
+                    return _connectionFactory.CreateConnectionAsync().GetAwaiter().GetResult();
+
+                });
+
+            builder.Services.AddTransient<IRabbitPublisher, RabbitPublisher>(
+                sp =>
+                {
+                    var connection = sp.GetRequiredService<IConnection>();
+                    return new RabbitPublisher(connection.CreateChannelAsync().GetAwaiter().GetResult());
+                }
+                );
 
             builder.Services.AddAntiforgery();
 
