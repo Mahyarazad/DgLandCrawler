@@ -741,7 +741,7 @@ namespace DgLandCrawler.Services.SiteCrawler
         {
             var productList = await _dGProductRepository.GetList();
 
-            using (var _driver = CreateDriver(supplier == Supplier.Noon ? 9228 : 9229, true))
+            using (var _driver = CreateDriver(supplier == Supplier.Noon ? 9228 : 9229))
             {
                 foreach (var dg in productList.Reverse())
                 {
@@ -823,6 +823,11 @@ namespace DgLandCrawler.Services.SiteCrawler
                 {
                     WebDriverWait wait = new WebDriverWait(driver, TimeSpan.FromSeconds(3));
                     wait.Until(SeleniumExtras.WaitHelpers.ExpectedConditions.ElementIsVisible(By.XPath("//div[@id='hits']")));
+                }
+                else
+                {
+                    WebDriverWait wait = new WebDriverWait(driver, TimeSpan.FromSeconds(3));
+                    wait.Until(SeleniumExtras.WaitHelpers.ExpectedConditions.ElementIsVisible(By.XPath("//div[@class='ProductListDesktop_layoutWrapper__Kiw3A']")));
                 }
 
                 return driver.FindElements(By.XPath(GetSearchResultXPath(supplier)));
