@@ -130,24 +130,56 @@ namespace DgLandCrawler.Data.Repository
 
             using var reader = await cmd.ExecuteReaderAsync(token);
             while (await reader.ReadAsync(token)) {
-                int i = 0;
-                products.Add(new PriceViewModel
+
+                // The if statement filters the parent products (old products that user variations)
+                // The parent product is a record with empty price and the child products will add to the list
+                if(reader.GetInt32(reader.GetOrdinal(nameof(PriceViewModel.RegularPrice)))!= 0
+                    && ExtractIntFromFloatPrice(reader) != 0)
                 {
-                    DgLandId = reader.GetInt32(0),
-                    CreationTime = reader.GetDateTime(1),
-                    Category = reader.GetString(2),
-                    Name = reader.GetString(3),
-                    Title = reader.GetString(4),
-                    BaseUrl = reader.GetString(5),
-                    Supplier = reader.GetString(6),
-                    Price = reader.GetString(7),
-                    RegularPrice = reader.GetInt32(8),
-                    SalePrice = reader.GetInt32(9)
-                });
+                    products.Add(new PriceViewModel
+                    {
+                        DgLandId = reader.GetInt32(reader.GetOrdinal(nameof(PriceViewModel.DgLandId))),
+                        CreationTime = reader.GetDateTime(reader.GetOrdinal(nameof(PriceViewModel.CreationTime))),
+                        UpdateTime = reader.GetDateTime(reader.GetOrdinal(nameof(PriceViewModel.UpdateTime))),
+                        Category = reader.GetString(reader.GetOrdinal(nameof(PriceViewModel.Category))),
+                        Name = reader.GetString(reader.GetOrdinal(nameof(PriceViewModel.Name))),
+                        Title = reader.GetString(reader.GetOrdinal(nameof(PriceViewModel.Title))),
+                        BaseUrl = reader.GetString(reader.GetOrdinal(nameof(PriceViewModel.BaseUrl))),
+                        Supplier = reader.GetString(reader.GetOrdinal(nameof(PriceViewModel.Supplier))),
+                        Price = reader.GetString(reader.GetOrdinal(nameof(PriceViewModel.Price))),
+                        RegularPrice = reader.GetInt32(reader.GetOrdinal(nameof(PriceViewModel.RegularPrice))),
+                        SalePrice = reader.GetInt32(reader.GetOrdinal(nameof(PriceViewModel.SalePrice))),
+                        PriceGap = GetPriceGap(reader)  
+                    });
+                }
             }
 
             return products;
 
+        }
+
+        private static int GetPriceGap(System.Data.Common.DbDataReader reader)
+        {
+            int price = ExtractIntFromFloatPrice(reader);
+            var regularPrice = reader.GetInt32(reader.GetOrdinal(nameof(PriceViewModel.RegularPrice)));
+            if (price == 0)
+            {
+                return 0;
+            }
+            else
+            {
+                if (reader.GetInt32(reader.GetOrdinal(nameof(PriceViewModel.SalePrice))) == 0)
+                {
+                    return price - regularPrice;
+                }
+
+                return price - reader.GetInt32(reader.GetOrdinal(nameof(PriceViewModel.SalePrice)));
+            }
+        }
+
+        private static int ExtractIntFromFloatPrice(System.Data.Common.DbDataReader reader)
+        {
+            return (int)Convert.ToDecimal(reader.GetString(reader.GetOrdinal(nameof(PriceViewModel.Price))));
         }
     }
 }

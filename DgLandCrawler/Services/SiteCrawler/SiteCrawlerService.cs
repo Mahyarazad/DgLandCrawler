@@ -695,6 +695,7 @@ namespace DgLandCrawler.Services.SiteCrawler
                                     {
                                         google.Price = "0";
                                     }
+                                    google.UpdateTime = DateTime.Now;
 
                                     break;
                                 case "SharafDG":
@@ -704,15 +705,19 @@ namespace DgLandCrawler.Services.SiteCrawler
                                     {
                                         priceElement = _driver.FindElement(By.XPath("//meta[@itemprop='price']"));
                                         google.Price = priceElement.GetAttribute("Content");
+                                       
                                     }
                                     else
                                     {
                                         google.Price = "0";
                                     }
+
+                                    google.UpdateTime = DateTime.Now;
                                     break;
                                 default:
                                     break;
                             }
+
 
                             await _dGProductRepository.UpdateGoogleSearchResultsAsync(dg.Id, dg.GoogleResult);
                         }

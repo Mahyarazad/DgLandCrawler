@@ -31,8 +31,9 @@ BEGIN
 	WITH RankedResults AS (
 		SELECT 
 			dg.DgLandId, 
-			dg.Category,
 			gs.CreationTime, 
+			gs.UpdateTime, 
+			dg.Category,
 			dg.Name, 
 			gs.Title,
 			gs.BaseUrl,
