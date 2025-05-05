@@ -1,5 +1,6 @@
 ﻿using DgLandCrawler.Models;
 using Microsoft.Extensions.Options;
+using Serilog;
 using System.Text;
 
 namespace DgLandCrawler.Services.GptClient
@@ -45,6 +46,8 @@ namespace DgLandCrawler.Services.GptClient
             response.EnsureSuccessStatusCode();
 
             var responseString = await response.Content.ReadAsStringAsync();
+
+            Log.Information("GptClient >> GetResultFromGPT >> {Message}", new { Message = responseString });
 
             return System.Text.Json.JsonSerializer.Deserialize<Root>(responseString);
         }
