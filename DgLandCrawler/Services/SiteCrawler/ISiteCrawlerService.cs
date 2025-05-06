@@ -12,6 +12,5 @@ namespace DgLandCrawler.Services.SiteCrawler
         Task DownloadDGLandProducts(AdminPanelCredential credential);
         Task CrawlSuppliers();
         Task FetchSupplierLinks(Supplier supplier);
-        Task GenerateCSVFile();
     }
 }

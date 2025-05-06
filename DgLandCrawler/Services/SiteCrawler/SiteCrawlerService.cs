@@ -8,13 +8,12 @@ using System.Data;
 using DgLandCrawler.Helper;
 using OpenQA.Selenium.Support.Extensions;
 using System.Diagnostics;
-using DgLandCrawler.Services.DbUpdater;
 using DgLandCrawler.Data.Repository;
 using DgLandCrawler.Models.DTO;
-using OpenQA.Selenium.Support.UI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using Serilog;
+using OpenQA.Selenium.Support.UI;
 
 
 namespace DgLandCrawler.Services.SiteCrawler
@@ -33,143 +32,224 @@ namespace DgLandCrawler.Services.SiteCrawler
             _config = _appConfig.Value;
         }
 
-        private IWebDriver CreateDriver(int remoteDebuggingPort, bool headless = true)
+        public (IWebDriver Driver, string ProfilePath) CreateDriver(int remoteDebuggingPort, bool headless = true)
         {
             var options = new ChromeOptions();
 
+            string userDataDir = Path.Combine(Path.GetTempPath(), $"chrome-profile-{Guid.NewGuid()}");
+            Directory.CreateDirectory(userDataDir);
+            options.AddArgument($"--user-data-dir={userDataDir}");
+
             if (headless)
             {
+                options.AddArgument("--headless=new");
+                options.AddArgument("--disable-gpu");
+                options.AddArgument("--window-size=1920,1080");
+            }
+            else
+            {
                 options.AddArgument("--start-maximized");
-                options.AddArgument("--headless=new"); // Use --headless=new for Chrome 109+
-                options.AddArgument("--disable-gpu");  // Optional: helps on Windows
             }
 
-            //options.AddArgument($"--remote-debugging-port={remoteDebuggingPort}");
             options.AddUserProfilePreference("download.default_directory", @"C:\Users\mhyri\Downloads\selenium_downloads");
             options.AddUserProfilePreference("download.prompt_for_download", false);
             options.AddUserProfilePreference("download.directory_upgrade", true);
             options.AddUserProfilePreference("safebrowsing.enabled", true);
 
-
-            // Create ChromeDriverService manually
             var service = ChromeDriverService.CreateDefaultService();
-            service.Port = remoteDebuggingPort; // <<< This sets the actual ChromeDriver port
+            service.HideCommandPromptWindow = true;
 
             var driver = new ChromeDriver(service, options);
-            driver.Manage().Timeouts().PageLoad = TimeSpan.FromSeconds(60);
+            driver.Manage().Timeouts().PageLoad = TimeSpan.FromSeconds(30);
+            driver.Manage().Timeouts().ImplicitWait = TimeSpan.FromSeconds(5);
 
-            return driver;
+            return (driver, userDataDir);
         }
+
+
 
 
 
         public async Task StartCaching()
         {
-            using (var _driver = CreateDriver(9231))
+            var (_driver, profilePath) = CreateDriver(9231);
+
+            try
             {
-                try
+                var taskList = new List<Task>();
+                _driver.Navigate().GoToUrl("https://dgland.ae/sitemap_index.xml");
+                var parentLinks = LinkParser.GetSiteUrl(_driver.PageSource);
+                foreach (var (link, index) in parentLinks.Select((value, index) => (value, index)))
                 {
-                    var taskList = new List<Task>();
-                    _driver.Navigate().GoToUrl("https://dgland.ae/sitemap_index.xml");
-                    var parentLinks = LinkParser.GetSiteUrl(_driver.PageSource);
-                    foreach (var (link, index) in parentLinks.Select((value, index) => (value, index)))
+                    if (!string.IsNullOrEmpty(link))
                     {
-                        if (!string.IsNullOrEmpty(link))
+                        _driver.Navigate().GoToUrl(link);
+
+                        var childNodes = LinkParser.GetSiteUrl(_driver.PageSource);
+
+                        taskList.Add(Task.Run(() =>
                         {
-                            _driver.Navigate().GoToUrl(link);
-
-                            var childNodes = LinkParser.GetSiteUrl(_driver.PageSource);
-
-                            taskList.Add(Task.Run(()=>
+                            var (__driver, profilePath) = CreateDriver(940 + index);
+                            foreach (var childLink in childNodes[1..])
                             {
-                                using (var __driver = CreateDriver(940 + index))
+                                try
                                 {
-                                    foreach (var childLink in childNodes[1..])
-                                    {
-                                        try
-                                        {
-                                            Log.Information("Caching >>  Url >> {Message}", new { Message = childLink });
-                                            __driver.Navigate().GoToUrl(childLink);
-                                        }
-                                        catch (Exception ex)
-                                        {
-                                            Log.Error("Inner navigation error: {Message}", ex.Message);
-                                            Log.Error("StackTrace: {StackTrace}", ex.StackTrace);
-                                        }
-
-                                    }
+                                    Log.Information("Caching >>  Url >> {Message}", new { Message = childLink });
+                                    __driver.Navigate().GoToUrl(childLink);
                                 }
+                                catch (Exception ex)
+                                {
+                                    Log.Error("Inner navigation error: {Message}", ex.Message);
+                                    Log.Error("StackTrace: {StackTrace}", ex.StackTrace);
+                                }
+                                finally
+                                {
+                                    __driver.Quit();
+                                    try { Directory.Delete(profilePath, true); }
+                                    catch (Exception ex) { Log.Warning("Profile cleanup failed: {Message}", ex.Message); }
+                                }
+
                             }
-                            ));                         
                         }
+                        ));
                     }
-
-                    await Task.WhenAll(taskList);
                 }
-                catch (Exception e)
-                {
-                    Log.Error("An error occurred: {Message}", new { Message = e.Message });
 
-                    Log.Error("An error occurred: {StackTrace}", new { StackTrace = e.StackTrace });
-                }
+                await Task.WhenAll(taskList);
             }
+            catch (Exception e)
+            {
+                Log.Error("An error occurred: {Message}", new { Message = e.Message });
+
+                Log.Error("An error occurred: {StackTrace}", new { StackTrace = e.StackTrace });
+            }
+            finally
+            {
+                _driver.Quit();
+                try { Directory.Delete(profilePath, true); }
+                catch (Exception ex) { Log.Warning("Profile cleanup failed: {Message}", ex.Message); }
+            }
+
         }
 
         private Task<List<DGProduct>> GetProductList()
         {
             List<DGProduct> PdList = [];
-            using (var _driver = CreateDriver(9232))
+            var (_driver, profilePath) = CreateDriver(9232);
+
+            try
             {
-                try
+                _driver.Navigate().GoToUrl("https://dgland.ae/product-sitemap.xml");
+
+                var pageSource = _driver.PageSource;
+
+                foreach (var link in LinkParser.ExtractLinks(pageSource))
                 {
-                    _driver.Navigate().GoToUrl("https://dgland.ae/product-sitemap.xml");
-
-                    var pageSource = _driver.PageSource;
-
-                    foreach (var link in LinkParser.ExtractLinks(pageSource))
+                    if (!string.IsNullOrEmpty(link) && !link.Contains("shop"))
                     {
-                        if (!string.IsNullOrEmpty(link) && !link.Contains("shop"))
+                        PdList.Add(new DGProduct
                         {
-                            PdList.Add(new DGProduct
-                            {
-                                Name = link.Replace("https://dgland.ae/product/", "")
-                                      .Replace("/", "")
-                                      .Replace("-", " ").ToUpperInvariant(),
-                                Url = link
-                            });
+                            Name = link.Replace("https://dgland.ae/product/", "")
+                                  .Replace("/", "")
+                                  .Replace("-", " ").ToUpperInvariant(),
+                            Url = link
+                        });
 
-                        }
                     }
                 }
-                catch (Exception e)
-                {
-                    Log.Error("An error occurred: {Message}", new { Message = e.Message });
-
-                    Log.Error("An error occurred: {StackTrace}", new { StackTrace = e.StackTrace });
-                }
-
             }
+            catch (Exception e)
+            {
+                Log.Error("An error occurred: {Message}", new { Message = e.Message });
+
+                Log.Error("An error occurred: {StackTrace}", new { StackTrace = e.StackTrace });
+            }
+            finally
+            {
+                _driver.Quit();
+                try { Directory.Delete(profilePath, true); }
+                catch (Exception ex) { Log.Warning("Profile cleanup failed: {Message}", ex.Message); }
+            }
+
+
 
             return Task.FromResult(PdList);
         }
 
         public async Task UpdateAltImages()
         {
-            using (var _driver = CreateDriver(9222))
+            var (_driver, profilePath) = CreateDriver(9222);
+            await _driver.Navigate().GoToUrlAsync("https://dgland.ae/wp-admin/upload.php");
+
+            await Task.Delay(5000);
+
+            try
             {
-                await _driver.Navigate().GoToUrlAsync("https://dgland.ae/wp-admin/upload.php");
+                for (var i = 0; i < 20; i++)
+                {
+                    _driver.FindElement(By.ClassName("load-more")).Click();
 
-                await Task.Delay(5000);
+                    await Task.Delay(3000);
+                }
 
+            }
+            catch (Exception e)
+            {
+                Log.Error("An error occurred: {Message}", new { Message = e.Message });
+
+                Log.Error("An error occurred: {StackTrace}", new { StackTrace = e.StackTrace });
+            }
+
+
+            var doc = new HtmlDocument();
+
+            doc.LoadHtml(_driver.PageSource);
+
+            var nodes = doc.DocumentNode.SelectNodes("//li[@role='checkbox']");
+
+            if (nodes != null)
+            {
                 try
                 {
-                    for (var i = 0; i < 20; i++)
+                    foreach (var node in nodes)
                     {
-                        _driver.FindElement(By.ClassName("load-more")).Click();
 
-                        await Task.Delay(3000);
+                        _driver.FindElement(By.XPath(node.XPath)).Click();
+
+                        var productElement = _driver.FindElement(By.XPath("//div[@class='uploaded-to']//a"));
+
+                        if (productElement != null)
+                        {
+                            //_driver.FindElement(By.Id("attachment-details-two-column-alt-text")).Clear();
+
+                            //_driver.FindElement(By.Id("attachment-details-two-column-alt-text")).SendKeys(productElement.Text);
+
+                            _driver.FindElement(By.Id("attachment-details-two-column-title")).Clear();
+
+                            _driver.FindElement(By.Id("attachment-details-two-column-title")).SendKeys(productElement.Text);
+
+                            //_driver.FindElement(By.Id("attachment-details-two-column-caption")).Clear();
+
+                            //_driver.FindElement(By.Id("attachment-details-two-column-caption")).SendKeys(productElement.Text);
+
+                            //_driver.FindElement(By.Id("attachment-details-two-column-description")).Clear();
+
+                            //_driver.FindElement(By.Id("attachment-details-two-column-description")).SendKeys(productElement.Text);
+                        }
+
+                        await Task.Delay(100);
+
+                        _driver.FindElement(By.ClassName("media-modal-close")).Click();
+
                     }
+                }
+                catch (NoSuchElementException e)
+                {
+                    Log.Error("An error occurred: {Message}", new { Message = e.Message });
 
+                    _driver.FindElement(By.ClassName("media-modal-close")).Click();
+
+                    Log.Error("An error occurred: {StackTrace}", new { StackTrace = e.StackTrace });
                 }
                 catch (Exception e)
                 {
@@ -177,82 +257,43 @@ namespace DgLandCrawler.Services.SiteCrawler
 
                     Log.Error("An error occurred: {StackTrace}", new { StackTrace = e.StackTrace });
                 }
-
-                var doc = new HtmlDocument();
-
-                doc.LoadHtml(_driver.PageSource);
-
-                var nodes = doc.DocumentNode.SelectNodes("//li[@role='checkbox']");
-
-                if (nodes != null)
+                finally
                 {
-                    foreach (var node in nodes)
-                    {
-                        try
-                        {
-
-                            _driver.FindElement(By.XPath(node.XPath)).Click();
-
-                            var productElement = _driver.FindElement(By.XPath("//div[@class='uploaded-to']//a"));
-
-                            if (productElement != null)
-                            {
-                                //_driver.FindElement(By.Id("attachment-details-two-column-alt-text")).Clear();
-
-                                //_driver.FindElement(By.Id("attachment-details-two-column-alt-text")).SendKeys(productElement.Text);
-
-                                _driver.FindElement(By.Id("attachment-details-two-column-title")).Clear();
-
-                                _driver.FindElement(By.Id("attachment-details-two-column-title")).SendKeys(productElement.Text);
-
-                                //_driver.FindElement(By.Id("attachment-details-two-column-caption")).Clear();
-
-                                //_driver.FindElement(By.Id("attachment-details-two-column-caption")).SendKeys(productElement.Text);
-
-                                //_driver.FindElement(By.Id("attachment-details-two-column-description")).Clear();
-
-                                //_driver.FindElement(By.Id("attachment-details-two-column-description")).SendKeys(productElement.Text);
-                            }
-
-                            await Task.Delay(100);
-
-                            _driver.FindElement(By.ClassName("media-modal-close")).Click();
-
-                        }
-                        catch (NoSuchElementException e)
-                        {
-                            Log.Error("An error occurred: {Message}", new { Message = e.Message });
-
-                            _driver.FindElement(By.ClassName("media-modal-close")).Click();
-
-                            Log.Error("An error occurred: {StackTrace}", new { StackTrace = e.StackTrace });
-                        }
-                        catch (Exception e)
-                        {
-                            Log.Error("An error occurred: {Message}", new { Message = e.Message });
-
-                            Log.Error("An error occurred: {StackTrace}", new { StackTrace = e.StackTrace });
-                        }
-                    }
+                    _driver.Quit();
+                    try { Directory.Delete(profilePath, true); }
+                    catch (Exception ex) { Log.Warning("Profile cleanup failed: {Message}", ex.Message); }
                 }
             }
-            
+
         }
 
         public async Task PostPDP()
         {
-            using (var _driver = CreateDriver(9223))
-            {
-                var productList = await GetProductList();
+            var (_driver, profilePath) = CreateDriver(9223);
 
+            var productList = await GetProductList();
+            try
+            {
                 foreach (var item in productList)
                 {
                     await DotheJob(item, _driver);
                 }
             }
+            catch (Exception e)
+            {
+                Log.Error("An error occurred: {Message}", new { Message = e.Message });
+
+                Log.Error("An error occurred: {StackTrace}", new { StackTrace = e.StackTrace });
+            }
+            finally
+            {
+                _driver.Quit();
+                try { Directory.Delete(profilePath, true); }
+                catch (Exception ex) { Log.Warning("Profile cleanup failed: {Message}", ex.Message); }
+            }
         }
 
-        private async Task DotheJob(DGProduct item , IWebDriver _driver)
+        private async Task DotheJob(DGProduct item, IWebDriver _driver)
         {
             try
             {
@@ -459,7 +500,8 @@ namespace DgLandCrawler.Services.SiteCrawler
 
         private async Task CaptureSubmit(DGProduct product, Random random, string prompt)
         {
-            using (var _driver = CreateDriver(9224))
+            var (_driver, profilePath) = CreateDriver(9224);
+            try
             {
                 _driver.Navigate().GoToUrl(product.Url);
 
@@ -514,49 +556,66 @@ namespace DgLandCrawler.Services.SiteCrawler
                     }
                 }
             }
-                
+            catch (Exception ex)
+            {
+
+            }
+            finally
+            {
+                _driver.Quit();
+                try { Directory.Delete(profilePath, true); }
+                catch (Exception ex) { Log.Warning("Profile cleanup failed: {Message}", ex.Message); }
+            }
+
         }
 
         private async Task AddReview(GptReview gptReview)
         {
-            using (var _driver = CreateDriver(9225))
+            var (_driver, profilePath) = CreateDriver(9225);
+
+            try
             {
-                try
-                {
-                    Actions actions = new Actions(_driver);
-                    IWebElement score = _driver.FindElement(By.XPath($"//a[@class='star-{gptReview.Score}']"));
-                    ((IJavaScriptExecutor)_driver).ExecuteScript("arguments[0].scrollIntoView(true);", score);
-                    await Task.Delay(100);
-                    ((IJavaScriptExecutor)_driver).ExecuteScript("arguments[0].click();", score);
+                Actions actions = new Actions(_driver);
+                IWebElement score = _driver.FindElement(By.XPath($"//a[@class='star-{gptReview.Score}']"));
+                ((IJavaScriptExecutor)_driver).ExecuteScript("arguments[0].scrollIntoView(true);", score);
+                await Task.Delay(100);
+                ((IJavaScriptExecutor)_driver).ExecuteScript("arguments[0].click();", score);
 
 
-                    _driver.FindElement(By.XPath("//textarea[@id='comment']")).SendKeys(gptReview.Message);
+                _driver.FindElement(By.XPath("//textarea[@id='comment']")).SendKeys(gptReview.Message);
 
 
-                    _driver.FindElement(By.XPath("//input[@id='author']")).SendKeys(gptReview.PersonName);
+                _driver.FindElement(By.XPath("//input[@id='author']")).SendKeys(gptReview.PersonName);
 
 
-                    _driver.FindElement(By.XPath("//input[@id='email']")).SendKeys(gptReview.Email);
-                    ((IJavaScriptExecutor)_driver).ExecuteScript("arguments[0].scrollIntoView(true);", _driver.FindElement(By.XPath("//input[@id='email']")));
+                _driver.FindElement(By.XPath("//input[@id='email']")).SendKeys(gptReview.Email);
+                ((IJavaScriptExecutor)_driver).ExecuteScript("arguments[0].scrollIntoView(true);", _driver.FindElement(By.XPath("//input[@id='email']")));
 
-                    IWebElement submit = _driver.FindElement(By.CssSelector("input[id='submit']"));
-                    ((IJavaScriptExecutor)_driver).ExecuteScript("arguments[0].scrollIntoView(true);", submit);
+                IWebElement submit = _driver.FindElement(By.CssSelector("input[id='submit']"));
+                ((IJavaScriptExecutor)_driver).ExecuteScript("arguments[0].scrollIntoView(true);", submit);
 
-                    await Task.Delay(100);
-                    ((IJavaScriptExecutor)_driver).ExecuteScript("arguments[0].click();", submit);
-                    await Task.Delay(100);
-                }
-                catch (Exception ex) { Log.Error("AddReview {Error}", ex.Message); }
+                await Task.Delay(100);
+                ((IJavaScriptExecutor)_driver).ExecuteScript("arguments[0].click();", submit);
+                await Task.Delay(100);
             }
-                
+            catch (Exception ex) { Log.Error("AddReview {Error}", ex.Message); }
+            finally
+            {
+                _driver.Quit();
+                try { Directory.Delete(profilePath, true); }
+                catch (Exception ex) { Log.Warning("Profile cleanup failed: {Message}", ex.Message); }
+            }
+
+
         }
 
         public async Task DownloadDGLandProducts(AdminPanelCredential credential)
         {
 
-            using (var _driver = CreateDriver(9226, false)) 
-            { 
-                var login = Task.Run(() => AdminLogin(credential, _driver));
+            var (_driver, profilePath) = CreateDriver(9226);
+            try
+            {
+                var login = Task.Run(() => CrawlHelper.AdminLogin(credential, _driver));
 
                 Task.WaitAll(login);
 
@@ -571,92 +630,22 @@ namespace DgLandCrawler.Services.SiteCrawler
 
                 var timeStamp = DateTime.Now;
 
-                while(Directory.GetFiles(_config.DownloadPath).Count() == 0)
+                while (Directory.GetFiles(_config.DownloadPath).Count() == 0)
                 {
                     await Task.Delay(5000);
                 }
 
-                while(File.GetCreationTime(Directory.GetFiles(_config.DownloadPath).LastOrDefault()!) < timeStamp)
+                while (File.GetCreationTime(Directory.GetFiles(_config.DownloadPath).LastOrDefault()!) < timeStamp)
                 {
                     await Task.Delay(5000);
                 }
-                
-
-                //foreach(var item in data.Reverse())
-                //{
-                //    try
-                //    {
-
-                //        var searchElem = _driver.FindElement(By.XPath("//input[@data-qa='txt_searchBar']"));
-
-                //        Log.Information("Search Element: {Message}", searchElem);
-                //        var clear = _driver.FindElements(By.TagName("button"));
-                //        clear[2].Click();
-
-                //        searchElem.Clear();
-                //        searchElem.SendKeys(item.Name.Replace(" ","-"));
-                //        searchElem.SendKeys(Keys.Enter);
-                //        await Task.Delay(3000);
-                //        var continer = _driver.FindElements(By.ClassName("grid"));
-
-                //        if(closeSignin)
-                //        {
-                //            await Task.Delay(2000);
-                //            _driver.FindElement(By.CssSelector("[class*='SigninV2_closeButton']")).Click();
-                //            await Task.Delay(1000);
-                //            closeSignin = false;
-                //        }
-
-
-                //        if(continer.Count > 0)
-                //        {
-                //            var stringCheck = item.Name.Split(' ');
-                //            foreach(var elem in continer)
-                //            {
-                //                try
-                //                {
-                //                    var productNameElement = elem.FindElement(By.CssSelector("div[data-qa='product-name']"));
-                //                    if(CheckProductSearch(stringCheck, productNameElement))
-                //                    {
-
-                //                        var amountElement = elem.FindElement(By.ClassName("amount"));
-                //                        Log.Information("Product Detail: {Message}", amountElement.Text);
-
-                //                        Log.Information("Product Detail: {Message}", productNameElement.GetAttribute("title"));
-
-
-
-                //                        if(!string.IsNullOrEmpty(productNameElement.GetAttribute("title")) && !string.IsNullOrEmpty(amountElement.Text))
-                //                        {
-                //                            item.GoogleResult.Add(new GoogleSearchResult
-                //                            {
-                //                                Title = productNameElement.GetAttribute("title"),
-                //                                Price = amountElement.Text,
-                //                                Supplier = "Noon.com",
-                //                                CreationTime = DateTime.Now
-                //                            });
-
-                //                        }
-                //                    }
-                //                }
-                //                catch(Exception e)
-                //                {
-                //                    Log.Error("An error occurred: {Message}", e.Message);
-                //                }
-                //            }
-
-                //            item.CrawlDateTime = DateTime.Now;
-                //            await _dGProductRepository.AddAsync(item);
-                //        }
-                //    }
-                //    catch(Exception e)
-                //    {
-                //        Log.Error("An error occurred: {Message}", e.Message);
-                //    }
-
-                //}
-
-                //await AddGoogleContainerResult(data);
+            }
+            catch (Exception ex) { Log.Error("AddReview {Error}", ex.Message); }
+            finally
+            {
+                _driver.Quit();
+                try { Directory.Delete(profilePath, true); }
+                catch (Exception ex) { Log.Warning("Profile cleanup failed: {Message}", ex.Message); }
             }
 
         }
@@ -664,72 +653,76 @@ namespace DgLandCrawler.Services.SiteCrawler
         public async Task CrawlSuppliers()
         {
             var productList = await _dGProductRepository.GetList();
-            using (var _driver = CreateDriver(9227))
+            var (_driver, profilePath) = CreateDriver(9227);
+            try
             {
+
                 foreach (var dg in productList.Reverse())
                 {
                     foreach (var google in dg.GoogleResult)
                     {
-                        try
+                        _driver.Navigate().GoToUrl(google.BaseUrl);
+                        IWebElement priceElement = null;
+
+                        switch (google.Supplier)
                         {
-                            _driver.Navigate().GoToUrl(google.BaseUrl);
-                            IWebElement priceElement = null;
-
-                            switch (google.Supplier)
-                            {
-                                case "Noon":
-                                    string noonScript = "return document.querySelectorAll('span[class=\"PriceOffer_priceNowText__08sYH\"]').length > 0;";
-                                    bool noonElement = _driver.ExecuteJavaScript<bool>(noonScript);
-                                    if (noonElement)
+                            case "Noon":
+                                string noonScript = "return document.querySelectorAll('span[class=\"PriceOffer_priceNowText__08sYH\"]').length > 0;";
+                                bool noonElement = _driver.ExecuteJavaScript<bool>(noonScript);
+                                if (noonElement)
+                                {
+                                    var price = _driver.FindElement(By.XPath("//span[@class='PriceOffer_priceNowText__08sYH']")).Text;
+                                    if (!string.IsNullOrEmpty(price))
                                     {
-                                        var price = _driver.FindElement(By.XPath("//span[@class='PriceOffer_priceNowText__08sYH']")).Text;
-                                        if (!string.IsNullOrEmpty(price))
-                                        {
-                                            google.Price = price
-                                                    .Replace("Inclusive of VAT", "")
-                                                    .Replace("AED", "")
-                                                    .Replace("\r\n", "");
-                                        }
+                                        google.Price = price
+                                                .Replace("Inclusive of VAT", "")
+                                                .Replace("AED", "")
+                                                .Replace("\r\n", "");
                                     }
-                                    else
-                                    {
-                                        google.Price = "0";
-                                    }
-                                    google.UpdateTime = DateTime.Now;
+                                }
+                                else
+                                {
+                                    google.Price = "0";
+                                }
+                                google.UpdateTime = DateTime.Now;
 
-                                    break;
-                                case "SharafDG":
-                                    string sharafScript = "return document.querySelectorAll('meta[itemprop=\"price\"]').length > 0;";
-                                    bool sharafElement = _driver.ExecuteJavaScript<bool>(sharafScript);
-                                    if (sharafElement)
-                                    {
-                                        priceElement = _driver.FindElement(By.XPath("//meta[@itemprop='price']"));
-                                        google.Price = priceElement.GetAttribute("Content");
-                                       
-                                    }
-                                    else
-                                    {
-                                        google.Price = "0";
-                                    }
+                                break;
+                            case "SharafDG":
+                                string sharafScript = "return document.querySelectorAll('meta[itemprop=\"price\"]').length > 0;";
+                                bool sharafElement = _driver.ExecuteJavaScript<bool>(sharafScript);
+                                if (sharafElement)
+                                {
+                                    priceElement = _driver.FindElement(By.XPath("//meta[@itemprop='price']"));
+                                    google.Price = priceElement.GetAttribute("Content");
 
-                                    google.UpdateTime = DateTime.Now;
-                                    break;
-                                default:
-                                    break;
-                            }
+                                }
+                                else
+                                {
+                                    google.Price = "0";
+                                }
 
-
-                            await _dGProductRepository.UpdateGoogleSearchResultsAsync(dg.Id, dg.GoogleResult);
+                                google.UpdateTime = DateTime.Now;
+                                break;
+                            default:
+                                break;
                         }
-                        catch (Exception e)
-                        {
-                            Log.Error("Something went wrong: {error}", e.Message);
-                        }
+
+
+                        await _dGProductRepository.UpdateGoogleSearchResultsAsync(dg.Id, dg.GoogleResult);
                     }
                 }
-            }                
+            }
+            catch (Exception e)
+            {
+                Log.Error("Something went wrong: {error}", e.Message);
+            }
+            finally
+            {
+                _driver.Quit();
+                try { Directory.Delete(profilePath, true); }
+                catch (Exception ex) { Log.Warning("Profile cleanup failed: {Message}", ex.Message); }
+            }
         }
-
 
         public enum Supplier
         {
@@ -741,169 +734,141 @@ namespace DgLandCrawler.Services.SiteCrawler
         {
             var productList = await _dGProductRepository.GetList();
 
-            using (var _driver = CreateDriver(supplier == Supplier.Noon ? 9228 : 9229))
+            productList = [.. productList.Reverse()];
+
+            var semaphore = new SemaphoreSlim(20);
+
+            var tasks = new List<Task>();
+
+            foreach (var (index, product) in productList.Select((index, value) => (value, index)))
             {
-                foreach (var dg in productList.Reverse())
+
+                await semaphore.WaitAsync(); // ⬅️ Wait for slot
+
+                try
                 {
-                    if (dg.GoogleResult != null && !dg.GoogleResult.Any(x => x.Supplier == supplier.ToString()))
+                    Log.Information("Adding product {Id} task", product.Id); // ⬅️ Log task start
+
+                    tasks.Add(ProcessNoonMatching(supplier, product, index));
+                }
+                catch (Exception ex)
+                {
+                    Log.Error("SiteCrealerService >> FetchSupplierLinks >> Error processing product {ProductId}: {Message}", product.Id, ex.Message);
+                }
+                finally
+                {
+                    semaphore.Release();
+                }
+            }
+
+            Log.Information("Starting executing ===================>>>"); // ⬅️ Log task start
+            await Task.WhenAll(tasks);
+        }
+
+        private async Task ProcessNoonMatching(Supplier supplier, DGProductData dg, int index)
+        {
+            if (dg.GoogleResult != null && dg.GoogleResult.Any(x => x.Supplier == supplier.ToString()))
+                return;
+
+            var (_driver, profilePath) = CreateDriver(9500 + index, false);
+
+            List<GoogleSearchResult>? productData = null;
+
+            try
+            {
+                var builder = CrawlHelper.BuildSupplierUri(dg.Name, supplier);
+                _driver.Navigate().GoToUrl(builder.Uri.AbsoluteUri);
+
+                var waitForPageLoad = new WebDriverWait(_driver, TimeSpan.FromSeconds(10));
+                waitForPageLoad.Until(driver =>
+                    ((IJavaScriptExecutor)driver).ExecuteScript("return document.readyState").ToString() == "complete");
+
+                ((IJavaScriptExecutor)_driver).ExecuteScript("window.scrollTo(0, document.body.scrollHeight)");
+                Thread.Sleep(1000); // let JS render
+
+                WebDriverWait wait = new(_driver, TimeSpan.FromSeconds(30));
+                By locator = supplier switch
+                {
+                    Supplier.SharafDG => By.XPath("//div[@id='hits']"),
+                    _ => By.XPath("//div[@class='ProductListDesktop_layoutWrapper__Kiw3A']")
+                };
+                wait.Until(SeleniumExtras.WaitHelpers.ExpectedConditions.ElementExists(locator));
+
+                var searchResult = _driver.FindElements(By.XPath(CrawlHelper.GetSearchResultXPath(supplier)));
+                if (searchResult == null || searchResult.Count == 0)
+                {
+                    Log.Warning("WaitForSearchResult >> Found zero elements for supplier {Supplier}", supplier);
+                    return;
+                }
+
+                var titles = CrawlHelper.ExtractTitles(searchResult, supplier);
+                var prices = CrawlHelper.ExtractPrices(searchResult, supplier);
+                var productUrls = CrawlHelper.ExtractProductUrls(searchResult, supplier);
+
+                if (!titles.Any())
+                    return;
+
+                var query = CrawlHelper.BuildMatchingQuery(dg.Name, titles);
+                var gptResponse = await _gptClient.GetResultFromGPT(query);
+
+                if (gptResponse?.choices.Any() == true)
+                {
+                    var firstResult = gptResponse.choices.FirstOrDefault();
+                    var res = firstResult?.message.content?.Replace("\n", "").Split("  ");
+
+                    if (res != null && res.Length > 0)
                     {
-                        try
+                        int _index = titles.IndexOf(res[0]);
+                        if (_index != -1)
                         {
-                            var builder = BuildSupplierUri(dg.Name, supplier);
-                            _driver.Navigate().GoToUrl(builder.ToString());
+                            string price = supplier == Supplier.SharafDG
+                                ? prices[_index].Replace("AED ", "")
+                                : prices[_index];
 
-                            var searchResult = WaitForSearchResult(_driver, supplier);
-                            if (searchResult == null) continue;
-
-                            var titles = ExtractTitles(searchResult, supplier);
-                            var prices = ExtractPrices(searchResult, supplier);
-                            var productUrls = ExtractProductUrls(searchResult, supplier);
-
-                            if (!titles.Any()) continue;
-                            var query = BuildMatchingQuery(dg.Name, titles);
-                            var gptResponse = await _gptClient.GetResultFromGPT(query);
-
-                            if (gptResponse?.choices.Any() == true)
-                            {
-                                var firstResult = gptResponse.choices.FirstOrDefault();
-                                var res = firstResult?.message.content?.Replace("\n", "").Split("  ");
-
-                                if (res != null && res.Length > 0)
+                            productData =
+                            [
+                                new ()
                                 {
-                                    int index = titles.IndexOf(res[0]);
-                                    if (index != -1)
-                                    {
-                                        string price = supplier == Supplier.SharafDG ? prices[index].Replace("AED ", "") : prices[index];
-
-                                        var productData = new List<GoogleSearchResult>
-                                        {
-                                            new GoogleSearchResult
-                                            {
-                                                Title = titles[index],
-                                                BaseUrl = productUrls[index],
-                                                CreationTime = DateTime.Now,
-                                                DGProductId = dg.Id,
-                                                Supplier = supplier.ToString(),
-                                                Price = price
-                                            }
-                                        };
-
-                                        Log.Information("FetchSupplierLinks >> UpdateGoogleSearchResultsAsync >> {Message}", new { Message = productData });
-                                        await _dGProductRepository.UpdateGoogleSearchResultsAsync(dg.Id, productData);
-                                    }
+                                    Title = titles[_index],
+                                    BaseUrl = productUrls[_index],
+                                    CreationTime = DateTime.Now,
+                                    DGProductId = dg.Id,
+                                    Supplier = supplier.ToString(),
+                                    Price = price
                                 }
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            Log.Error("An error occurred: {Message}", new { Message = ex.Message });
+                            ];
                         }
                     }
                 }
-            }
-        }
-
-        private UriBuilder BuildSupplierUri(string productName, Supplier supplier)
-        {
-            if (supplier == Supplier.Noon)
+            }catch(Exception ex)
             {
-                return new UriBuilder("https", "www.noon.com") { Path = "uae-en/search", Query = $"q={productName}" };
+                Log.Warning("FetchSupplierLinks >> ProcessNoonMatching >> {Message}", new { Message = ex.Message });
             }
-            else // SharafDG
+            finally
             {
-                return new UriBuilder("https", "uae.sharafdg.com") { Query = $"q={productName}&post_type=product" };
-            }
-        }
-
-        private IReadOnlyCollection<IWebElement> WaitForSearchResult(IWebDriver driver, Supplier supplier)
-        {
-            try
-            {
-                if (supplier == Supplier.SharafDG)
+                try
                 {
-                    WebDriverWait wait = new WebDriverWait(driver, TimeSpan.FromSeconds(3));
-                    wait.Until(SeleniumExtras.WaitHelpers.ExpectedConditions.ElementIsVisible(By.XPath("//div[@id='hits']")));
+                    if (productData != null)
+                    {
+                        Log.Information("FetchSupplierLinks >> UpdateGoogleSearchResultsAsync >> {Message}", new { Message = productData });
+
+                        await _dGProductRepository.UpdateGoogleSearchResultsAsync(dg.Id, productData);
+                    }
+
+                    _driver.Quit();
+
+                    Directory.Delete(profilePath, true);
                 }
-                else
+                catch (Exception ex)
                 {
-                    WebDriverWait wait = new WebDriverWait(driver, TimeSpan.FromSeconds(3));
-                    wait.Until(SeleniumExtras.WaitHelpers.ExpectedConditions.ElementIsVisible(By.XPath("//div[@class='ProductListDesktop_layoutWrapper__Kiw3A']")));
+                    Log.Warning("FetchSupplierLinks >> ProcessNoonMatching >> ProfileCleanup__UpdateGoogleSearchResultsAsync >> {Message}", new { Message = ex.Message });
                 }
-
-                return driver.FindElements(By.XPath(GetSearchResultXPath(supplier)));
             }
-            catch
-            {
-                return null;
-            }
+
+            
         }
 
-        private string GetSearchResultXPath(Supplier supplier)
-        {
-            return supplier == Supplier.Noon
-                ? "//*[@id='catalog-page-container']/div/div[2]/div[2]/div[4]/div"
-                : "//div[@id='hits']";
-        }
-
-        private List<string> ExtractTitles(IReadOnlyCollection<IWebElement> searchResult, Supplier supplier)
-        {
-            string titleXPath = supplier == Supplier.Noon
-                ? ".//h2[@class='ProductDetailsSection_title__JorAV']"
-                : ".//h4[@class='name']";
-
-            return searchResult
-                .SelectMany(x => x.FindElements(By.XPath(titleXPath)))
-                .Select(e => e.Text)
-                .ToList();
-        }
-
-        private List<string> ExtractPrices(IReadOnlyCollection<IWebElement> searchResult, Supplier supplier)
-        {
-            string priceXPath = supplier == Supplier.Noon
-                ? ".//strong[@class='Price_amount__2sXa7']"
-                : ".//div[@class='price']";
-
-            return searchResult
-                .SelectMany(x => x.FindElements(By.XPath(priceXPath)))
-                .Select(e => e.Text)
-                .ToList();
-        }
-
-        private List<string> ExtractProductUrls(IReadOnlyCollection<IWebElement> searchResult, Supplier supplier)
-        {
-            // Both Noon and SharafDG seem to have direct anchor links inside each item
-            return searchResult
-                .SelectMany(x => x.FindElements(By.XPath("./a")))
-                .Select(e => e.GetAttribute("href"))
-                .ToList();
-        }
-
-        private string BuildMatchingQuery(string productTitle, List<string> titles)
-        {
-            return $"I have a list of product titles: [{string.Join("; ", titles)}]. " +
-                   $"My product title is: \"{productTitle}\". " +
-                   $"First, check for an exact match and return only the matched title. " +
-                   $"If no exact match exists, find and return only the closest matching product title based on model, storage, and color. " +
-                   $"Return only the product title, no explanation or extra text. " +
-                   $"If no match exists, reply exactly with 'No Match'.";
-        }
-
-        private Task AdminLogin(AdminPanelCredential credential, IWebDriver _driver)
-        {
-            _driver.Navigate().GoToUrl("https://dgland.ae/wp-admin/");
-
-            _driver.FindElement(By.Id("user_login")).SendKeys(credential.Useranme);
-
-            _driver.FindElement(By.Id("user_pass")).SendKeys(credential.Password);
-
-            _driver.FindElement(By.Id("wp-submit")).Click();
-
-            return Task.CompletedTask;
-        }
-
-        public Task GenerateCSVFile()
-        {
-            return Task.FromResult(0);
-        }
     }
+
 }
+
