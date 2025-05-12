@@ -92,23 +92,8 @@ namespace DgLandCrawler.Services.SiteCrawler
                             var (__driver, profilePath) = CreateDriver(940 + index);
                             foreach (var childLink in childNodes[1..])
                             {
-                                try
-                                {
-                                    Log.Information("Caching >>  Url >> {Message}", new { Message = childLink });
-                                    __driver.Navigate().GoToUrl(childLink);
-                                }
-                                catch (Exception ex)
-                                {
-                                    Log.Error("Inner navigation error: {Message}", ex.Message);
-                                    Log.Error("StackTrace: {StackTrace}", ex.StackTrace);
-                                }
-                                finally
-                                {
-                                    __driver.Quit();
-                                    try { Directory.Delete(profilePath, true); }
-                                    catch (Exception ex) { Log.Warning("Profile cleanup failed: {Message}", ex.Message); }
-                                }
-
+                                Log.Information("Caching >>  Url >> {Message}", new { Message = childLink });
+                                __driver.Navigate().GoToUrl(childLink);
                             }
                         }
                         ));
@@ -653,7 +638,7 @@ namespace DgLandCrawler.Services.SiteCrawler
         public async Task CrawlSuppliers()
         {
             var productList = await _dGProductRepository.GetList();
-            var (_driver, profilePath) = CreateDriver(9227);
+            var (_driver, profilePath) = CreateDriver(9227, false);
             try
             {
 
@@ -661,7 +646,7 @@ namespace DgLandCrawler.Services.SiteCrawler
                 {
                     foreach (var google in dg.GoogleResult)
                     {
-                        _driver.Navigate().GoToUrl(google.BaseUrl);
+                        await _driver.Navigate().GoToUrlAsync(google.BaseUrl);
                         IWebElement priceElement = null;
 
                         switch (google.Supplier)
@@ -684,7 +669,7 @@ namespace DgLandCrawler.Services.SiteCrawler
                                 {
                                     google.Price = "0";
                                 }
-                                google.UpdateTime = DateTime.Now;
+
 
                                 break;
                             case "SharafDG":
@@ -701,12 +686,13 @@ namespace DgLandCrawler.Services.SiteCrawler
                                     google.Price = "0";
                                 }
 
-                                google.UpdateTime = DateTime.Now;
+
                                 break;
                             default:
                                 break;
                         }
 
+                        google.UpdateTime = DateTime.Now;
 
                         await _dGProductRepository.UpdateGoogleSearchResultsAsync(dg.Id, dg.GoogleResult);
                     }
